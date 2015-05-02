@@ -643,8 +643,6 @@ print, "mu0", mu0
 print, "usqr", usqr
 print, "wsqr", wsqr
 
-return
-
 repeat begin
 
     for i = 0, nchains - 1 do begin ;do markov chains one at-a-time

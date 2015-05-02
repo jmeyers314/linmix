@@ -18,8 +18,8 @@ class LinMix(object):
 
     def report_all(self):
         print
-        # print "xi", self.xi
-        # print "eta", self.eta
+        print "xi mean std", np.mean(self.xi), np.std(self.xi)
+        print "eta mean std", np.mean(self.eta), np.std(self.eta)
         print "alpha", self.alpha
         print "beta", self.beta
         print "sigsqr", self.sigsqr
@@ -55,8 +55,7 @@ class LinMix(object):
         self.wsqr = np.max([self.wsqr, 0.01*np.var(x, ddof=1)])
 
         # Now get an MCMC value dispersed around above values
-        X = np.empty((N, 2), dtype=float)
-        X[:,0] = 1.0
+        X = np.ones((N, 2), dtype=float)
         X[:,1] = x
         Sigma = np.linalg.inv(np.dot(X.T, X)) * self.sigsqr
         coef = np.random.multivariate_normal([0, 0], Sigma)
@@ -71,7 +70,7 @@ class LinMix(object):
         
         success = False
         while not success:
-            mu0g = self.mu0 + (np.sqrt(np.var(x, ddof=1) / N) * np.random.normal() / 
+            mu0g = self.mu0 + (np.random.normal(scale=np.sqrt(np.var(x, ddof=1) / N)) / 
                                np.sqrt(1./np.random.chisquare(1)))
             success = (mu0g > self.mu0min) & (mu0g < self.mu0max)
         self.mu0 = mu0g
@@ -109,16 +108,17 @@ class LinMix(object):
         if self.xsig is not None:
             rho_xy_sqr = 0.0
             sigma_xihat_ik_sqr_inv += 1./(self.xsig[:,np.newaxis]**2*(1-rho_xy_sqr))
-        sigma_xihat_ik_sqr_inv += self.beta**2 / self.sigsqr + self.tausqr
+        sigma_xihat_ik_sqr_inv += self.beta**2 / self.sigsqr + 1./self.tausqr
         sigma_xihat_ik_sqr = 1./sigma_xihat_ik_sqr_inv
         # Eqn (57)
         sigma_xihat_i_sqr = np.sum(self.G * sigma_xihat_ik_sqr, axis=1)
         # Eqn (56)
         xihat_xy_i = self.x + 0
         # Eqn (55)
-        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis]
-                    * (0.0 + self.beta*(self.eta[:,np.newaxis] - self.alpha)/self.sigsqr
-                       + self.mu/self.tausqr))
+        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis] * ((xihat_xy_i/self.xsig**2)[:,np.newaxis]
+                                                       + self.beta*(self.eta[:,np.newaxis] 
+                                                                    - self.alpha)/self.sigsqr
+                                                       + self.mu/self.tausqr))
         # Eqn (54)
         xihat_i = np.sum(self.G * xihat_ik, axis=1)
         # Eqn (53)
@@ -126,33 +126,32 @@ class LinMix(object):
 
     def update_eta(self): # Step 4
         # Eqn (68)
-        rho_xy_i = 0.0
-        sigma_etahat_i_inv = 1.0 / (self.ysig**2 * rho_xy_i + 1./self.sigsqr)
-        sigma_etahat_i = 1./sigma_etahat_i_inv
+        rho_xy_i_sqr = 0.0
+        sigma_etahat_i_sqr_inv = 1.0 / (self.ysig**2 * (1 - rho_xy_i_sqr)) + 1./self.sigsqr
+        sigma_etahat_i_sqr = 1./sigma_etahat_i_sqr_inv
         # Eqn (67)
-        etahat_i = sigma_etahat_i * ((self.y + 0.0) / (self.ysig**2 * (1.0 + 0.0))
-                                     + (self.alpha + self.beta*self.xi)/self.sigsqr)
+        etahat_i = sigma_etahat_i_sqr * ((self.y + 0.0) / (self.ysig**2 * (1.0 - rho_xy_i_sqr))
+                                         + (self.alpha + self.beta*self.xi)/self.sigsqr)
         # Eqn (66)
-        self.eta = np.random.normal(loc=etahat_i, scale=np.sqrt(sigma_etahat_i), size=self.N)
+        self.eta = np.random.normal(loc=etahat_i, scale=np.sqrt(sigma_etahat_i_sqr), size=self.N)
 
     def update_G(self): # Step 5
         # Eqn (74)
-        Np = (1./np.sqrt(2*np.pi*self.tausqr)
-              * np.exp(-0.5 * (self.xi[:,np.newaxis] - self.mu)**2 / self.tausqr))
-        q_ki = self.pi * Np / np.sum(self.pi * Np, axis=1)[:,np.newaxis]
+        piNp = self.pi * (1./np.sqrt(2*np.pi*self.tausqr)
+                          * np.exp(-0.5 * (self.xi[:,np.newaxis] - self.mu)**2 / self.tausqr))
+        q_ki = piNp / np.sum(piNp, axis=1)[:,np.newaxis]
         # Eqn (73)
         for i in xrange(self.N):
             self.G[i] = np.random.multinomial(1, q_ki[i])
 
     def update_alpha_beta(self): # Step 6
-        X = np.empty((self.N, 2), dtype=float)
-        X[:,0] = 1.0
+        X = np.ones((self.N, 2), dtype=float)
         X[:,1] = self.xi
         # Eqn (77)
-        tmp = np.linalg.inv(np.dot(X.T, X))
-        Sigma_chat = tmp * self.sigsqr
+        XTXinv = np.linalg.inv(np.dot(X.T, X))
+        Sigma_chat = XTXinv * self.sigsqr
         # Eqn (76)
-        chat = np.dot(np.dot(tmp, X.T), self.eta)
+        chat = np.dot(np.dot(XTXinv, X.T), self.eta)
         # Eqn (75)
         self.alpha, self.beta = np.random.multivariate_normal(chat, Sigma_chat)
 
@@ -162,7 +161,7 @@ class LinMix(object):
         # Eqn (79)
         nu = self.N - 2
         # Eqn (78)
-        self.sigsqr = 1./inv_chisqr(nu, ssqr)
+        self.sigsqr = nu * ssqr / np.random.chisquare(nu)
 
     def update_pi(self): # Step 8
         # Eqn (82)
@@ -193,7 +192,7 @@ class LinMix(object):
         # Eqn (94)
         mubar = 1./self.K * np.sum(self.mu)
         # Eqn (93)
-        self.mu0 = np.random.normal(loc=mubar, scale=np.sqrt(self.usqr/self.K), size=self.K)
+        self.mu0 = np.random.normal(loc=mubar, scale=np.sqrt(self.usqr/self.K))
 
     def update_usqr(self): # Step 12
         # Eqn (96)
@@ -246,10 +245,10 @@ def dump_test_data():
     xi = np.concatenate([xi, np.random.normal(loc=2.0, scale=1.5, size=20)])
     xi = np.concatenate([xi, np.random.normal(loc=3.0, scale=0.5, size=30)])
     eta = 3*xi + 4
-    x = xi + np.random.normal(loc=0.0, scale=0.5, size=len(xi))
-    y = eta + np.random.normal(loc=0.0, scale=0.5, size=len(eta))
-    xsig = np.ones_like(x) * 0.5
-    ysig = np.ones_like(x) * 0.5
+    xsig = np.ones_like(xi) * 0.5
+    ysig = np.ones_like(eta) * 0.5
+    x = xi + np.random.normal(loc=0.0, scale=xsig, size=len(xi))
+    y = eta + np.random.normal(loc=0.0, scale=ysig, size=len(eta))
     
     out = Table([x, y, xsig, ysig], names=['x', 'y', 'xsig', 'ysig'])
     import astropy.io.ascii as ascii
@@ -266,6 +265,6 @@ if __name__ == '__main__':
     lm = LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
     lm.initial_guess()
     lm.report_all()
-    for i in range(10):
-        lm.initial_guess()
+    for i in range(1000):
+        lm.step()
         lm.report_all()
