@@ -523,7 +523,6 @@ for k = 0, ngauss - 1 do tausqrg[k,*] = 0.5 * wsqrg * 4 / $
 mug = dblarr(ngauss, nchains)   ;initial group means
 for k = 0, ngauss - 1 do mug[k,*] = mu0g + sqrt(wsqrg) * randomn(seed, nchains)
 
-; STOPPING HERE!
 ;get initial group proportions and group labels
 
 pig = dblarr(ngauss, nchains)
@@ -632,6 +631,19 @@ endif
 
 gamma = dblarr(nx, ngauss)
 nk = fltarr(ngauss)
+
+print, "Initial values"
+print, "alpha", alpha
+print, "beta", beta
+print, "sigsqr", sigsqr
+print, "pi", pi
+print, "mu", mu
+print, "tausqr", tausqr
+print, "mu0", mu0
+print, "usqr", usqr
+print, "wsqr", wsqr
+
+return
 
 repeat begin
 

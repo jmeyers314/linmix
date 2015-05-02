@@ -16,12 +16,29 @@ class LinMix(object):
         self.N = len(self.x)
         self.K = K
 
+    def report_all(self):
+        print
+        # print "xi", self.xi
+        # print "eta", self.eta
+        print "alpha", self.alpha
+        print "beta", self.beta
+        print "sigsqr", self.sigsqr
+        print "pi", self.pi
+        print "mu", self.mu
+        print "tausqr", self.tausqr
+        print "mu0", self.mu0
+        print "usqr", self.usqr
+        print "wsqr", self.wsqr
+        # print "G", self.G
+
     def initial_guess(self): # Step 1
         # For convenience
         x = self.x
         y = self.y
         xsig = self.xsig
         ysig = self.ysig
+        N = self.N
+        K = self.K
 
         xvar = xsig**2
         yvar = ysig**2
@@ -33,23 +50,12 @@ class LinMix(object):
         self.sigsqr = np.max([self.sigsqr, 0.05 * np.var(y - self.alpha - self.beta * x,
                                                          ddof=1)])
 
-        # DEBUGGING
-        print "alpha: {}".format(self.alpha)
-        print "beta: {}".format(self.beta)
-        print "sigsqr: {}".format(self.sigsqr)
-        # END DEBUGGING
-
         self.mu0 = np.median(x)
         self.wsqr = np.var(x, ddof=1) - np.median(xvar)
         self.wsqr = np.max([self.wsqr, 0.01*np.var(x, ddof=1)])
 
-        # DEBUGGING
-        print "mu0: {}".format(self.mu0)
-        print "wsqr: {}".format(self.wsqr)
-        # END DEBUGGING
-
         # Now get an MCMC value dispersed around above values
-        X = np.empty((self.N, 2), dtype=float)
+        X = np.empty((N, 2), dtype=float)
         X[:,0] = 1.0
         X[:,1] = x
         Sigma = np.linalg.inv(np.dot(X.T, X)) * self.sigsqr
@@ -57,38 +63,45 @@ class LinMix(object):
         chisqr = np.random.chisquare(1)
         self.alpha += coef[0] * np.sqrt(1./chisqr)
         self.beta += coef[1] * np.sqrt(1./chisqr)
-        self.sigsqr *= 0.5 * self.N / np.random.chisquare(0.5*self.N)
+        self.sigsqr *= 0.5 * N / np.random.chisquare(0.5*N)
 
         # Now get the values for the mixture parameters, first do prior params
         self.mu0min = min(x)
         self.mu0max = max(x)
         
         success = False
-        while not success :
-            mu0g = self.mu0 + (np.sqrt(np.var(x, ddof=1) / self.N) * np.random.normal() / 
+        while not success:
+            mu0g = self.mu0 + (np.sqrt(np.var(x, ddof=1) / N) * np.random.normal() / 
                                np.sqrt(1./np.random.chisquare(1)))
             success = (mu0g > self.mu0min) & (mu0g < self.mu0max)
         self.mu0 = mu0g
 
         # wsqr is the global scale
-        self.wsqr *= 0.5 * self.N / np.random.chisquare(0.5 * self.N)
+        self.wsqr *= 0.5 * N / np.random.chisquare(0.5 * N)
+        
+        self.umax = 1.5 * np.var(x, ddof=1)
         self.usqr = 0.5 * np.var(x, ddof=1)
         
-        self.tausqr = 0.5 * self.wsqr / np.random.chisquare(4, size=self.K)
+        self.tausqr = 0.5 * self.wsqr / np.random.chisquare(4, size=K)
 
-        self.mu = self.mu0 + self.random.normal(scale=np.sqrt(self.wsqr), size=self.K)
+        self.mu = self.mu0 + np.random.normal(scale=np.sqrt(self.wsqr), size=K)
         
-        # STOPPING HERE!
+        # get initial group proportions and group labels
         
-
-        # Initial guess for the latent ordinate is just the observed ordinate
+        pig = np.zeros(self.K, dtype=float)
+        if K == 1:
+            self.G = np.ones(N, dtype=int)
+            self.pi = np.array([1], dtype=float)
+        else:
+            self.G = np.zeros((N, K), dtype=int)
+            for i in xrange(N):
+                minind = np.argmin(abs(x[i] - self.mu))
+                pig[minind] += 1
+                self.G[i,minind] = 1
+            self.pi = np.random.dirichlet(pig+1)
+        
         self.eta = y
-        # Initial guess for the labels is uniformly distributed between the K mixture components.
-        self.G = np.random.multinomial(1, [1./self.K]*self.K, size=self.N)
-        # theta = {alpha, beta, sigsqr}
-        # psi = {pi_i, mu_i, tausqr_i} i=1..K
-        # Equally likely in any mixture component
-        self.pi = np.array([1./self.K]*self.K, dtype=float)
+        self.xi = x
 
     def update_xi(self): # Step 3
         # Eqn (58)
@@ -210,8 +223,7 @@ class LinMix(object):
         self.update_usqr()
         self.update_wsqr()
         if not hasattr(self, 'chain'):
-            self.chain = Table(names=['alpha', 'beta', 'sigsqr'],
-                               dtype=[np.float]*3)
+            self.chain = Table(names=['alpha', 'beta', 'sigsqr'])
         d = [self.alpha, self.beta, self.sigsqr]
         self.chain.add_row(d)
 
@@ -253,5 +265,7 @@ if __name__ == '__main__':
 
     lm = LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
     lm.initial_guess()
-    chain = lm.run_mcmc(10000)
-    import ipdb; ipdb.set_trace()
+    lm.report_all()
+    for i in range(10):
+        lm.initial_guess()
+        lm.report_all()
