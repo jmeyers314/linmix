@@ -17,35 +17,78 @@ class LinMix(object):
         self.K = K
 
     def initial_guess(self): # Step 1
-        xvar = self.xsig**2
-        yvar = self.ysig**2
+        # For convenience
+        x = self.x
+        y = self.y
+        xsig = self.xsig
+        ysig = self.ysig
+
+        xvar = xsig**2
+        yvar = ysig**2
+
         # Use BCES estimator for initial guess of theta = {alpha, beta, sigsqr}
-        self.beta = np.corrcoef(self.x, self.y) / (np.var(x) - np.mean(xvar))
+        self.beta = np.cov(x, y, ddof=1)[1,0] / (np.var(x, ddof=1) - np.mean(xvar))
         self.alpha = np.mean(y) - self.beta * np.mean(x)
-        self.sigsqr = np.var(y) - np.mean(yvar) - self.beta * np.corrcoef(self.x, self.y)
-        import ipdb; ipdb.set_trace()
-        self.sigsqr = np.max([self.sigsqr, 0.05 * np.var(self.y - self.alpha - self.beta * self.x)])
+        self.sigsqr = np.var(y, ddof=1) - np.mean(yvar) - self.beta * np.cov(x, y, ddof=1)[1,0]
+        self.sigsqr = np.max([self.sigsqr, 0.05 * np.var(y - self.alpha - self.beta * x,
+                                                         ddof=1)])
+
+        # DEBUGGING
+        print "alpha: {}".format(self.alpha)
+        print "beta: {}".format(self.beta)
+        print "sigsqr: {}".format(self.sigsqr)
+        # END DEBUGGING
+
+        self.mu0 = np.median(x)
+        self.wsqr = np.var(x, ddof=1) - np.median(xvar)
+        self.wsqr = np.max([self.wsqr, 0.01*np.var(x, ddof=1)])
+
+        # DEBUGGING
+        print "mu0: {}".format(self.mu0)
+        print "wsqr: {}".format(self.wsqr)
+        # END DEBUGGING
+
+        # Now get an MCMC value dispersed around above values
+        X = np.empty((self.N, 2), dtype=float)
+        X[:,0] = 1.0
+        X[:,1] = x
+        Sigma = np.linalg.inv(np.dot(X.T, X)) * self.sigsqr
+        coef = np.random.multivariate_normal([0, 0], Sigma)
+        chisqr = np.random.chisquare(1)
+        self.alpha += coef[0] * np.sqrt(1./chisqr)
+        self.beta += coef[1] * np.sqrt(1./chisqr)
+        self.sigsqr *= 0.5 * self.N / np.random.chisquare(0.5*self.N)
+
+        # Now get the values for the mixture parameters, first do prior params
+        self.mu0min = min(x)
+        self.mu0max = max(x)
+        
+        success = False
+        while not success :
+            mu0g = self.mu0 + (np.sqrt(np.var(x, ddof=1) / self.N) * np.random.normal() / 
+                               np.sqrt(1./np.random.chisquare(1)))
+            success = (mu0g > self.mu0min) & (mu0g < self.mu0max)
+        self.mu0 = mu0g
+
+        # wsqr is the global scale
+        self.wsqr *= 0.5 * self.N / np.random.chisquare(0.5 * self.N)
+        self.usqr = 0.5 * np.var(x, ddof=1)
+        
+        self.tausqr = 0.5 * self.wsqr / np.random.chisquare(4, size=self.K)
+
+        self.mu = self.mu0 + self.random.normal(scale=np.sqrt(self.wsqr), size=self.K)
+        
+        # STOPPING HERE!
+        
 
         # Initial guess for the latent ordinate is just the observed ordinate
-        self.eta = self.y
+        self.eta = y
         # Initial guess for the labels is uniformly distributed between the K mixture components.
         self.G = np.random.multinomial(1, [1./self.K]*self.K, size=self.N)
         # theta = {alpha, beta, sigsqr}
         # psi = {pi_i, mu_i, tausqr_i} i=1..K
         # Equally likely in any mixture component
         self.pi = np.array([1./self.K]*self.K, dtype=float)
-        # Center the mixture components near the x's, spread out like the spread in x's
-        xmean = np.mean(self.x)
-        xstd = np.std(self.x)
-
-        self.mu = np.random.normal(loc=xmean, scale=xmean, size=self.K)
-        self.tausqr = np.array([xstd**2]*self.K)
-
-        self.mu0 = np.median(self.x)
-        self.usqr = 1.0
-        self.wsqr = np.var(self.x) - np.median(self.xsig**2)
-        self.wsqr = max(self.wsqr, 0.01*np.var(x))
-
 
     def update_xi(self): # Step 3
         # Eqn (58)
@@ -180,18 +223,35 @@ class LinMix(object):
 
         return self.chain
 
-if __name__ == '__main__':
-    x = np.random.normal(loc=1.0, scale=1.0, size=10)
-    x = np.concatenate([x, np.random.normal(loc=2.0, scale=1.5, size=20)])
-    x = np.concatenate([x, np.random.normal(loc=3.0, scale=0.5, size=30)])
-    y = 3*x + 4
-    x += np.random.normal(loc=0.0, scale=0.5, size=len(x))
-    y += np.random.normal(loc=0.0, scale=0.5, size=len(y))
+def dump_test_data():
+    print "dumping test data"
+    alpha = 4.0
+    beta = 3.0
+    sigsqr = 0.5
+    
+    # GMM with 3 components for xi
+    xi = np.random.normal(loc=1.0, scale=1.0, size=9)
+    xi = np.concatenate([xi, np.random.normal(loc=2.0, scale=1.5, size=20)])
+    xi = np.concatenate([xi, np.random.normal(loc=3.0, scale=0.5, size=30)])
+    eta = 3*xi + 4
+    x = xi + np.random.normal(loc=0.0, scale=0.5, size=len(xi))
+    y = eta + np.random.normal(loc=0.0, scale=0.5, size=len(eta))
     xsig = np.ones_like(x) * 0.5
     ysig = np.ones_like(x) * 0.5
+    
+    out = Table([x, y, xsig, ysig], names=['x', 'y', 'xsig', 'ysig'])
+    import astropy.io.ascii as ascii
+    ascii.write(out, 'test.dat')
 
-    lm = LinMix(x, y, xsig, ysig)
+if __name__ == '__main__':
+    import astropy.io.ascii as ascii
+    try:
+        a = ascii.read('test.dat')
+    except:
+        dump_test_data()
+        a = ascii.read('test.dat')
 
+    lm = LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
     lm.initial_guess()
     chain = lm.run_mcmc(10000)
     import ipdb; ipdb.set_trace()
