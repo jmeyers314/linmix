@@ -1,11 +1,6 @@
-# What is n_k in (88), if K in (94) is number of mixture components?
-
 import numpy as np
 from astropy.table import Table
 from astropy.utils.console import ProgressBar
-
-def inv_chisqr(nu, ssqr, size=None):
-    return nu * ssqr / np.random.chisquare(nu, size=size)
 
 class LinMix(object):
     def __init__(self, x, y, xsig, ysig, K=3):
@@ -78,7 +73,7 @@ class LinMix(object):
         # wsqr is the global scale
         self.wsqr *= 0.5 * N / np.random.chisquare(0.5 * N)
         
-        self.umax = 1.5 * np.var(x, ddof=1)
+        self.usqrmax = 1.5 * np.var(x, ddof=1)
         self.usqr = 0.5 * np.var(x, ddof=1)
         
         self.tausqr = 0.5 * self.wsqr / np.random.chisquare(4, size=K)
@@ -165,32 +160,31 @@ class LinMix(object):
 
     def update_pi(self): # Step 8
         # Eqn (82)
-        nk = np.sum(self.G, axis=0)
+        self.nk = np.sum(self.G, axis=0)
         # Eqn (81)
-        self.pi = np.random.dirichlet(nk+1)
+        self.pi = np.random.dirichlet(self.nk+1)
 
     def update_mu(self): # Step 9
         # Eqn (86)
-        Sigma_muhat_k = 1./(1./self.usqr + self.K/self.tausqr)
+        Sigma_muhat_k = 1./(1./self.usqr + self.nk/self.tausqr)
         # Eqn (85)
-        xibar_k = 1/self.K * np.sum(self.G * self.xi[:,np.newaxis], axis=0)
+        xibar_k = 1/self.nk * np.sum(self.G * self.xi[:,np.newaxis], axis=0)
         # Eqn (84)
-        muhat_k = Sigma_muhat_k * (self.mu0/self.usqr + self.K/self.tausqr*xibar_k)
+        muhat_k = Sigma_muhat_k * (self.mu0/self.usqr + self.nk/self.tausqr*xibar_k)
         # Eqn (83)
         self.mu = np.random.multivariate_normal(muhat_k, np.diag(Sigma_muhat_k))
 
     def update_tausqr(self): # Step 10
-        # Eqn (89)
-        tk_sqr = 1./(self.K+1) * np.sum(self.wsqr + self.G*(self.xi[:,np.newaxis]-self.mu)**2,
-                                        axis=0)
         # Eqn (88)
-        nu_k = self.K + 1
+        nu_k = self.nk + 1
+        # Eqn (89)
+        tk_sqr = 1./nu_k * (self.wsqr + np.sum(self.G*(self.xi[:,np.newaxis]-self.mu)**2, axis=0))
         # Eqn (87)
-        self.tausqr = inv_chisqr(nu_k, tk_sqr)
+        self.tausqr = tk_sqr * nu_k / np.random.chisquare(nu_k)
 
     def update_mu0(self): # Step 11
         # Eqn (94)
-        mubar = 1./self.K * np.sum(self.mu)
+        mubar = np.mean(self.mu) 
         # Eqn (93)
         self.mu0 = np.random.normal(loc=mubar, scale=np.sqrt(self.usqr/self.K))
 
@@ -199,7 +193,11 @@ class LinMix(object):
         nu_u = self.K + 1
         # Eqn (97)
         usqrhat = 1./nu_u * (self.wsqr + np.sum((self.mu - self.mu0)**2))
-        self.usqr = inv_chisqr(nu_u, usqrhat)
+        success=False
+        while not success:
+            usqr = usqrhat * nu_u / np.random.chisquare(nu_u)
+            success = usqr <= self.usqrmax
+        self.usqr = usqr
 
     def update_wsqr(self): # Step 13
         # Eqn (102)
@@ -207,7 +205,7 @@ class LinMix(object):
         # Eqn (103)
         b = 0.5 * (1./self.usqr + np.sum(1./self.tausqr))
         # Eqn (101)
-        self.wsqr = np.random.gamma(a, b)
+        self.wsqr = np.random.gamma(a, 1./b)
 
     def step(self):
         self.update_xi()
@@ -226,7 +224,7 @@ class LinMix(object):
         d = [self.alpha, self.beta, self.sigsqr]
         self.chain.add_row(d)
 
-    def run_mcmc(self, niter, progress=False):
+    def run_mcmc(self, niter):
         with ProgressBar(niter) as bar:
             for i in xrange(niter):
                 self.step()
@@ -244,17 +242,17 @@ def dump_test_data():
     xi = np.random.normal(loc=1.0, scale=1.0, size=9)
     xi = np.concatenate([xi, np.random.normal(loc=2.0, scale=1.5, size=20)])
     xi = np.concatenate([xi, np.random.normal(loc=3.0, scale=0.5, size=30)])
-    eta = 3*xi + 4
+    eta = np.random.normal(loc=alpha+beta*xi, scale=np.sqrt(sigsqr))
     xsig = np.ones_like(xi) * 0.5
     ysig = np.ones_like(eta) * 0.5
-    x = xi + np.random.normal(loc=0.0, scale=xsig, size=len(xi))
-    y = eta + np.random.normal(loc=0.0, scale=ysig, size=len(eta))
+    x = np.random.normal(loc=xi, scale=xsig)
+    y = np.random.normal(loc=eta, scale=ysig)
     
     out = Table([x, y, xsig, ysig], names=['x', 'y', 'xsig', 'ysig'])
     import astropy.io.ascii as ascii
     ascii.write(out, 'test.dat')
 
-if __name__ == '__main__':
+def test():
     import astropy.io.ascii as ascii
     try:
         a = ascii.read('test.dat')
@@ -264,7 +262,8 @@ if __name__ == '__main__':
 
     lm = LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
     lm.initial_guess()
+    lm.run_mcmc(1000)
     lm.report_all()
-    for i in range(1000):
-        lm.step()
-        lm.report_all()
+
+if __name__ == '__main__':
+    test()
