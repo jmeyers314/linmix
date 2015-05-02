@@ -167,7 +167,7 @@ class LinMix(object):
         # Eqn (82)
         nk = np.sum(self.G, axis=0)
         # Eqn (81)
-        self.pi = np.random.dirichlet(nk, size=1)[0]
+        self.pi = np.random.dirichlet(nk+1)
 
     def update_mu(self): # Step 9
         # Eqn (86)
