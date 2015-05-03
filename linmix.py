@@ -1,5 +1,5 @@
 import numpy as np
-from astropy.table import Table
+from astropy.table import Table, Column
 from astropy.utils.console import ProgressBar
 
 class LinMix(object):
@@ -220,9 +220,20 @@ class LinMix(object):
         self.update_usqr()
         self.update_wsqr()
         if not hasattr(self, 'chain'):
-            self.chain = Table(names=['alpha', 'beta', 'sigsqr'])
-        d = [self.alpha, self.beta, self.sigsqr]
+            self.chain = Table(names=['alpha', 'beta', 'sigsqr', 
+                                      'pi', 'mu', 'tausqr', 
+                                      'mu0', 'usqr', 'wsqr', 
+                                      'ximean', 'xisig'], 
+                               dtype=(float, float, float, 
+                                      (float, 3), (float, 3), (float, 3),
+                                      float, float, float,
+                                      float, float))
+        d = [self.alpha, self.beta, self.sigsqr, 
+             self.pi, self.mu, self.tausqr, 
+             self.mu0, self.usqr, self.wsqr, 
+             np.mean(self.xi), np.std(self.xi)]
         self.chain.add_row(d)
+
 
     def run_mcmc(self, niter):
         with ProgressBar(niter) as bar:
@@ -231,6 +242,10 @@ class LinMix(object):
                 bar.update()
 
         return self.chain
+
+    def write_chain(self, out):
+        import astropy.io.ascii as ascii
+        ascii.write(self.chain, out)
 
 def dump_test_data():
     print "dumping test data"
@@ -262,8 +277,8 @@ def test():
 
     lm = LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
     lm.initial_guess()
-    lm.run_mcmc(1000)
-    lm.report_all()
+    lm.run_mcmc(10000)
+    lm.write_chain('test.pyout')
 
 if __name__ == '__main__':
     test()
