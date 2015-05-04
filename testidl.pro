@@ -1,7 +1,7 @@
 Pro testidl
   readcol, 'test.dat', x, y, xsig, ysig
   linmix_err, x, y, post, xsig=xsig, ysig=ysig
-  openw, lun, 'test.out', /get_lun
+  openw, lun, 'test.idlout', /get_lun
   printf, lun, 'alpha beta sigsqr pi0 pi1 pi2 mu0 mu1 mu2 tausqr0 tausqr1 tausqr2 mu00 usqr wsqr ximean xisig corr'
   writecol, 'test.out', post.alpha, post.beta, post.sigsqr, $
             post.pi[0], post.pi[1], post.pi[2], $
@@ -12,5 +12,4 @@ Pro testidl
             fmt='(f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f)', $
             filnum = lun
   close, lun
-  stop
 end

@@ -228,7 +228,8 @@ class LinMix(object):
                             ('usqr', float),
                             ('wsqr', float),
                             ('ximean', float),
-                            ('xisig', float)]
+                            ('xisig', float),
+                            ('corr', float)]
         self.chain = np.empty((chain_length,), dtype=self.chain_dtype)
         self.ichain = 0
 
@@ -242,8 +243,12 @@ class LinMix(object):
         self.chain['mu0'][self.ichain] = self.mu0
         self.chain['usqr'][self.ichain] = self.usqr
         self.chain['wsqr'][self.ichain] = self.wsqr
-        self.chain['ximean'][self.ichain] = np.mean(self.xi)
-        self.chain['xisig'][self.ichain] = np.std(self.xi)
+        ximean = np.sum(self.pi * self.mu)
+        self.chain['ximean'][self.ichain] = ximean
+        xisig = np.sqrt(np.sum(self.pi * (self.tausqr + self.mu**2)) - ximean**2)
+        self.chain['xisig'][self.ichain] = xisig
+        self.chain['corr'][self.ichain] = self.beta * xisig / np.sqrt(self.beta**2 * xisig**2 
+                                                                      + self.sigsqr)
         self.ichain += 1
 
     def step(self):
