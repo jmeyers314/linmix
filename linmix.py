@@ -172,14 +172,19 @@ class LinMix(object):
         self.pi = np.random.dirichlet(self.nk+1)
 
     def update_mu(self): # Step 9
-        # Eqn (86)
-        Sigma_muhat_k = 1./(1./self.usqr + self.nk/self.tausqr)
-        # Eqn (85)
-        xibar_k = 1/self.nk * np.sum(self.G * self.xi[:,np.newaxis], axis=0)
-        # Eqn (84)
-        muhat_k = Sigma_muhat_k * (self.mu0/self.usqr + self.nk/self.tausqr*xibar_k)
-        # Eqn (83)
-        self.mu = np.random.multivariate_normal(muhat_k, np.diag(Sigma_muhat_k))
+        Gsum = np.sum(self.G * self.xi[:,np.newaxis], axis=0)
+        for k in xrange(self.K):
+            if self.nk[k] != 0:
+                # Eqn (86)
+                Sigma_muhat_k = 1./(1./self.usqr + self.nk[k]/self.tausqr[k])
+                # Eqn (85)
+                xibar_k = 1/self.nk[k] * Gsum[k]
+                # Eqn (84)
+                muhat_k = Sigma_muhat_k * (self.mu0/self.usqr + self.nk[k]/self.tausqr[k]*xibar_k)
+                # Eqn (83)
+                self.mu[k] = np.random.normal(loc=muhat_k, scale=np.sqrt(Sigma_muhat_k))
+            else:
+                self.mu[k] = np.random.normal(loc=self.mu0, scale=np.sqrt(self.usqr))
 
     def update_tausqr(self): # Step 10
         # Eqn (88)
