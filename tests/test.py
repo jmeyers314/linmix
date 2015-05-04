@@ -22,7 +22,7 @@ def generate_test_data():
     out = Table([x, y, xsig, ysig], names=['x', 'y', 'xsig', 'ysig'])
     import astropy.io.ascii as ascii
     ascii.write(out, 'test.dat')
-    
+
 
 if __name__ == '__main__':
     import astropy.io.ascii as ascii
@@ -33,5 +33,7 @@ if __name__ == '__main__':
         a = ascii.read('test.dat')
 
     lm = linmix.LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
-    lm.run_mcmc(10000)
-    ascii.write(lm.chain, 'test.pyout')
+    lm.run_mcmc(100)
+    lm.step(100)
+    print lm.chains[0].chain.shape
+    #ascii.write(lm.chain, 'test.pyout')

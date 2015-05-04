@@ -1,22 +1,20 @@
 import numpy as np
 from astropy.table import Table, Column
-from astropy.utils.console import ProgressBar
 
-class LinMix(object):
-    def __init__(self, x, y, xsig, ysig, xycov=None, K=3):
-        self.x = np.array(x, dtype=float)
-        self.y = np.array(y, dtype=float)
-        self.xsig = np.array(xsig, dtype=float)
-        self.ysig = np.array(ysig, dtype=float)
-        self.N = len(self.x)
+class Chain(object):
+    def __init__(self, x, y, xsig, ysig, xycov, K,
+                 xycorr, xvar, yvar):
+        self.x = x
+        self.y = y
+        self.xsig = xsig
+        self.ysig = ysig
+        self.xycov = xycov
         self.K = K
-        if xycov is None:
-            self.xycov = np.zeros_like(self.x)
-        else:
-            self.xycov = np.array(xycov, dtype=float)
-        self.xycorr = self.xycov / (self.xsig * self.ysig)
-        self.xvar = self.xsig**2
-        self.yvar = self.ysig**2
+        self.xycorr = xycorr
+        self.xvar = xvar
+        self.yvar = yvar
+        self.N = len(self.x)
+        self.initialized = False
 
     def initial_guess(self): # Step 1
         # For convenience
@@ -90,6 +88,8 @@ class LinMix(object):
 
         self.eta = y
         self.xi = x
+
+        self.initialized = True
 
     def update_xi(self): # Step 3
         # Eqn (58)
@@ -218,6 +218,10 @@ class LinMix(object):
         self.chain = np.empty((chain_length,), dtype=self.chain_dtype)
         self.ichain = 0
 
+    def extend_chain(self, length):
+        extension = np.empty((length), dtype=self.chain_dtype)
+        self.chain = np.hstack((self.chain, extension))
+
     def update_chain(self):
         self.chain['alpha'][self.ichain] = self.alpha
         self.chain['beta'][self.ichain] = self.beta
@@ -232,7 +236,7 @@ class LinMix(object):
         self.chain['ximean'][self.ichain] = ximean
         xisig = np.sqrt(np.sum(self.pi * (self.tausqr + self.mu**2)) - ximean**2)
         self.chain['xisig'][self.ichain] = xisig
-        self.chain['corr'][self.ichain] = self.beta * xisig / np.sqrt(self.beta**2 * xisig**2 
+        self.chain['corr'][self.ichain] = self.beta * xisig / np.sqrt(self.beta**2 * xisig**2
                                                                       + self.sigsqr)
         self.ichain += 1
 
@@ -250,12 +254,41 @@ class LinMix(object):
         self.update_wsqr()
         self.update_chain()
 
-    def run_mcmc(self, niter):
-        self.initial_guess()
-        self.initialize_chain(niter)
-        with ProgressBar(niter) as bar:
-            for i in xrange(niter):
-                self.step()
-                bar.update()
 
-        return self.chain
+class LinMix(object):
+    def __init__(self, x, y, xsig, ysig, xycov=None, K=3, nchains=4):
+        self.x = np.array(x, dtype=float)
+        self.y = np.array(y, dtype=float)
+        self.xsig = np.array(xsig, dtype=float)
+        self.ysig = np.array(ysig, dtype=float)
+        self.N = len(self.x)
+        self.K = K
+        if xycov is None:
+            self.xycov = np.zeros_like(self.x)
+        else:
+            self.xycov = np.array(xycov, dtype=float)
+        self.xycorr = xycorr = self.xycov / (self.xsig * self.ysig)
+        self.xvar = xvar = self.xsig**2
+        self.yvar = yvar = self.ysig**2
+        self.nchains = nchains
+        self.chains = [Chain(self.x, self.y, self.xsig, self.ysig, self.xycov, self.K,
+                             self.xycorr, self.xvar, self.yvar) for i in range(self.nchains)]
+
+    def run_mcmc(self, niter):
+        for c in self.chains:
+            c.initial_guess()
+            c.initialize_chain(niter)
+        for i in xrange(niter):
+            for c in self.chains:
+                c.step()
+
+    def step(self, niter):
+        for c in self.chains:
+            if not c.initialized:
+                c.initial_guess()
+                c.initialize_chain(niter)
+            else:
+                c.extend_chain(niter)
+        for i in xrange(niter):
+            for c in self.chains:
+                c.step()
