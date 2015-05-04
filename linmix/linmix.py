@@ -240,19 +240,20 @@ class Chain(object):
                                                                       + self.sigsqr)
         self.ichain += 1
 
-    def step(self):
-        self.update_xi()
-        self.update_eta()
-        self.update_G()
-        self.update_alpha_beta()
-        self.update_sigsqr()
-        self.update_pi()
-        self.update_mu()
-        self.update_tausqr()
-        self.update_mu0()
-        self.update_usqr()
-        self.update_wsqr()
-        self.update_chain()
+    def step(self, niter):
+        for i in xrange(niter):
+            self.update_xi()
+            self.update_eta()
+            self.update_G()
+            self.update_alpha_beta()
+            self.update_sigsqr()
+            self.update_pi()
+            self.update_mu()
+            self.update_tausqr()
+            self.update_mu0()
+            self.update_usqr()
+            self.update_wsqr()
+            self.update_chain()
 
 
 class LinMix(object):
@@ -274,13 +275,37 @@ class LinMix(object):
         self.chains = [Chain(self.x, self.y, self.xsig, self.ysig, self.xycov, self.K,
                              self.xycorr, self.xvar, self.yvar) for i in range(self.nchains)]
 
-    def run_mcmc(self, niter):
-        for c in self.chains:
-            c.initial_guess()
-            c.initialize_chain(niter)
-        for i in xrange(niter):
-            for c in self.chains:
-                c.step()
+    def get_psi(self):
+        c0 = self.chains[0]
+        ndraw = c0.ichain/2
+        psi = np.empty((ndraw, self.nchains, 6), dtype=float)
+        psi[:,:,0] = np.vstack([c.chain['alpha'][0:ndraw] for c in self.chains]).T
+        beta = np.vstack([c.chain['beta'][0:ndraw] for c in self.chains]).T
+        psi[:,:,1] = beta
+        sigsqr = np.vstack([c.chain['sigsqr'][0:ndraw] for c in self.chains]).T
+        psi[:,:,2] = np.log(sigsqr)
+        ximean = np.vstack([np.sum(c.chain['pi'][0:ndraw] * c.chain['mu'][0:ndraw], axis=1)
+                                for c in self.chains]).T
+        psi[:,:,3] = ximean
+        xivar = np.vstack([np.sum(c.chain['pi'][0:ndraw] * (c.chain['tausqr'][0:ndraw] +
+                                                            c.chain['mu'][0:ndraw]**2),
+                                  axis=1)
+                           for c in self.chains]).T - ximean**2
+        psi[:,:,4] = xivar
+        psi[:,:,5] = np.arctanh(beta * np.sqrt(xivar / (beta**2 * xivar + sigsqr)))
+        return psi
+
+    def get_Rhat(self):
+        psi = self.get_psi()
+        ndraw = psi.shape[0]
+        psibarj = np.sum(psi, axis=0)/ndraw
+        psibar = np.mean(psibarj, axis=0)
+        sjsqr = np.sum((psi-psibarj)**2 / (ndraw-1.0), axis=(0,1))
+        Bvar = ndraw / (self.nchains-1.0) * np.sum((psibarj-psibar)**2, axis=0)
+        Wvar = sjsqr / self.nchains
+        varplus = (1.0 - 1.0 / ndraw) * Wvar + Bvar / ndraw
+        Rhat = np.sqrt(varplus / Wvar)
+        return Rhat
 
     def step(self, niter):
         for c in self.chains:
@@ -289,6 +314,34 @@ class LinMix(object):
                 c.initialize_chain(niter)
             else:
                 c.extend_chain(niter)
-        for i in xrange(niter):
+        for c in self.chains:
+            c.step(niter)
+
+    def run_mcmc(self, miniter=5000, maxiter=100000, silent=False):
+        checkiter = 100
+        for c in self.chains:
+            c.initial_guess()
+            c.initialize_chain(miniter)
+        for i in xrange(0, miniter, checkiter):
             for c in self.chains:
-                c.step()
+                c.step(checkiter)
+            Rhat = self.get_Rhat()
+
+            if not silent:
+                print
+                print "Iteration: ", i+checkiter
+                print "Rhat values for alpha, beta, log(sigma^2), mean(xi), log(var(xi)), atanh(corr(xi, eta)):"
+                print Rhat
+
+        i += checkiter
+        while not np.all(Rhat < 1.1):
+            for c in self.chains:
+                c.extend_chain(checkiter)
+                c.step(checkiter)
+            Rhat = self.get_Rhat()
+            if not silent:
+                print
+                print "Iteration: ", i+checkiter
+                print "Rhat values for alpha, beta, log(sigma^2), mean(xi), log(var(xi)), atanh(corr(xi, eta)):"
+                print Rhat
+                i += checkiter

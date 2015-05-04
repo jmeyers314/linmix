@@ -33,7 +33,6 @@ if __name__ == '__main__':
         a = ascii.read('test.dat')
 
     lm = linmix.LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
-    lm.run_mcmc(100)
-    lm.step(100)
-    print lm.chains[0].chain.shape
+    lm.run_mcmc()
+    print lm.chains
     #ascii.write(lm.chain, 'test.pyout')
