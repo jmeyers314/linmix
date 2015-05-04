@@ -18,21 +18,6 @@ class LinMix(object):
         self.xvar = self.xsig**2
         self.yvar = self.ysig**2
 
-    def report_all(self):
-        print
-        print "xi mean std", np.mean(self.xi), np.std(self.xi)
-        print "eta mean std", np.mean(self.eta), np.std(self.eta)
-        print "alpha", self.alpha
-        print "beta", self.beta
-        print "sigsqr", self.sigsqr
-        print "pi", self.pi
-        print "mu", self.mu
-        print "tausqr", self.tausqr
-        print "mu0", self.mu0
-        print "usqr", self.usqr
-        print "wsqr", self.wsqr
-        # print "G", self.G
-
     def initial_guess(self): # Step 1
         # For convenience
         x = self.x
@@ -266,6 +251,7 @@ class LinMix(object):
         self.update_chain()
 
     def run_mcmc(self, niter):
+        self.initial_guess()
         self.initialize_chain(niter)
         with ProgressBar(niter) as bar:
             for i in xrange(niter):
@@ -273,43 +259,3 @@ class LinMix(object):
                 bar.update()
 
         return self.chain
-
-    def write_chain(self, out):
-        import astropy.io.ascii as ascii
-        ascii.write(self.chain, out)
-
-def dump_test_data():
-    print "dumping test data"
-    alpha = 4.0
-    beta = 3.0
-    sigsqr = 0.5
-
-    # GMM with 3 components for xi
-    xi = np.random.normal(loc=1.0, scale=1.0, size=9)
-    xi = np.concatenate([xi, np.random.normal(loc=2.0, scale=1.5, size=20)])
-    xi = np.concatenate([xi, np.random.normal(loc=3.0, scale=0.5, size=30)])
-    eta = np.random.normal(loc=alpha+beta*xi, scale=np.sqrt(sigsqr))
-    xsig = np.ones_like(xi) * 0.5
-    ysig = np.ones_like(eta) * 0.5
-    x = np.random.normal(loc=xi, scale=xsig)
-    y = np.random.normal(loc=eta, scale=ysig)
-
-    out = Table([x, y, xsig, ysig], names=['x', 'y', 'xsig', 'ysig'])
-    import astropy.io.ascii as ascii
-    ascii.write(out, 'test.dat')
-
-def test():
-    import astropy.io.ascii as ascii
-    try:
-        a = ascii.read('test.dat')
-    except:
-        dump_test_data()
-        a = ascii.read('test.dat')
-
-    lm = LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
-    lm.initial_guess()
-    lm.run_mcmc(10000)
-    lm.write_chain('test.pyout')
-
-if __name__ == '__main__':
-    test()
