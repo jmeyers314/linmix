@@ -4,16 +4,16 @@ from astropy.utils.console import ProgressBar
 
 class LinMix(object):
     def __init__(self, x, y, xsig, ysig, xycov=None, K=3):
-        self.x = np.array(x)
-        self.y = np.array(y)
-        self.xsig = np.array(xsig)
-        self.ysig = np.array(ysig)
+        self.x = np.array(x, dtype=float)
+        self.y = np.array(y, dtype=float)
+        self.xsig = np.array(xsig, dtype=float)
+        self.ysig = np.array(ysig, dtype=float)
         self.N = len(self.x)
         self.K = K
         if xycov is None:
             self.xycov = np.zeros_like(self.x)
         else:
-            self.xycov = np.array(xycov)
+            self.xycov = np.array(xycov, dtype=float)
         self.xycorr = self.xycov / (self.xsig * self.ysig)
         self.xvar = self.xsig**2
         self.yvar = self.ysig**2
@@ -47,12 +47,12 @@ class LinMix(object):
         K = self.K
 
         # Use BCES estimator for initial guess of theta = {alpha, beta, sigsqr}
-        self.beta = ((np.cov(x, y, ddof=1)[1,0] - np.mean(xycov)) 
+        self.beta = ((np.cov(x, y, ddof=1)[1,0] - np.mean(xycov))
                      / (np.var(x, ddof=1) - np.mean(xvar)))
         self.alpha = np.mean(y) - self.beta * np.mean(x)
-        self.sigsqr = np.var(y, ddof=1) - np.mean(yvar) - self.beta * (np.cov(x, y, ddof=1)[1,0] 
+        self.sigsqr = np.var(y, ddof=1) - np.mean(yvar) - self.beta * (np.cov(x, y, ddof=1)[1,0]
                                                                        - np.mean(xycov))
-        self.sigsqr = np.max([self.sigsqr, 
+        self.sigsqr = np.max([self.sigsqr,
                               0.05 * np.var(y - self.alpha - self.beta * x, ddof=1)])
 
         self.mu0 = np.median(x)
@@ -65,33 +65,32 @@ class LinMix(object):
         Sigma = np.linalg.inv(np.dot(X.T, X)) * self.sigsqr
         coef = np.random.multivariate_normal([0, 0], Sigma)
         chisqr = np.random.chisquare(1)
-        self.alpha += coef[0] * np.sqrt(1./chisqr)
-        self.beta += coef[1] * np.sqrt(1./chisqr)
+        self.alpha += coef[0] * np.sqrt(1.0/chisqr)
+        self.beta += coef[1] * np.sqrt(1.0/chisqr)
         self.sigsqr *= 0.5 * N / np.random.chisquare(0.5*N)
 
         # Now get the values for the mixture parameters, first do prior params
         self.mu0min = min(x)
         self.mu0max = max(x)
-        
-        success = False
-        while not success:
-            mu0g = self.mu0 + (np.random.normal(scale=np.sqrt(np.var(x, ddof=1) / N)) / 
-                               np.sqrt(1./np.random.chisquare(1)))
-            success = (mu0g > self.mu0min) & (mu0g < self.mu0max)
+
+        mu0g = np.nan
+        while not (mu0g > self.mu0min) & (mu0g < self.mu0max):
+            mu0g = self.mu0 + (np.random.normal(scale=np.sqrt(np.var(x, ddof=1) / N)) /
+                               np.sqrt(1.0/np.random.chisquare(1.0)))
         self.mu0 = mu0g
 
         # wsqr is the global scale
         self.wsqr *= 0.5 * N / np.random.chisquare(0.5 * N)
-        
+
         self.usqrmax = 1.5 * np.var(x, ddof=1)
         self.usqr = 0.5 * np.var(x, ddof=1)
-        
-        self.tausqr = 0.5 * self.wsqr / np.random.chisquare(4, size=K)
+
+        self.tausqr = 0.5 * self.wsqr / np.random.chisquare(1.0, size=K)
 
         self.mu = self.mu0 + np.random.normal(scale=np.sqrt(self.wsqr), size=K)
-        
+
         # get initial group proportions and group labels
-        
+
         pig = np.zeros(self.K, dtype=float)
         if K == 1:
             self.G = np.ones(N, dtype=int)
@@ -103,21 +102,21 @@ class LinMix(object):
                 pig[minind] += 1
                 self.G[i,minind] = 1
             self.pi = np.random.dirichlet(pig+1)
-        
+
         self.eta = y
         self.xi = x
 
     def update_xi(self): # Step 3
         # Eqn (58)
-        sigma_xihat_ik_sqr = 1./(1./(self.xvar * (1 - self.xycorr**2))[:,np.newaxis]
-                                 + self.beta**2 / self.sigsqr 
-                                 + 1./self.tausqr)
+        sigma_xihat_ik_sqr = 1.0/(1.0/(self.xvar * (1.0 - self.xycorr**2))[:,np.newaxis]
+                                  + self.beta**2 / self.sigsqr
+                                  + 1.0/self.tausqr)
         # Eqn (57)
         sigma_xihat_i_sqr = np.sum(self.G * sigma_xihat_ik_sqr, axis=1)
         # Eqn (56)
         xihat_xy_i = self.x + self.xycov / self.yvar * (self.eta - self.y)
         # Eqn (55)
-        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis] 
+        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis]
                     * ((xihat_xy_i/self.xvar * (1.0 - self.xycorr**2))[:,np.newaxis]
                        + self.beta*(self.eta[:,np.newaxis] - self.alpha)/self.sigsqr
                        + self.mu/self.tausqr))
@@ -128,10 +127,10 @@ class LinMix(object):
 
     def update_eta(self): # Step 4
         # Eqn (68)
-        sigma_etahat_i_sqr = 1./(1./(self.yvar*(1.0 - self.xycorr**2)) + 1./self.sigsqr)
+        sigma_etahat_i_sqr = 1.0/(1.0/(self.yvar*(1.0 - self.xycorr**2)) + 1.0/self.sigsqr)
         # Eqn (67)
-        etahat_i = (sigma_etahat_i_sqr 
-                    * ((self.y + self.xycov * (self.xi - self.x)/self.xvar) 
+        etahat_i = (sigma_etahat_i_sqr
+                    * ((self.y + self.xycov * (self.xi - self.x)/self.xvar)
                        / (self.yvar * (1.0 - self.xycorr**2))
                        + (self.alpha + self.beta * self.xi) / self.sigsqr))
         # Eqn (66)
@@ -139,7 +138,7 @@ class LinMix(object):
 
     def update_G(self): # Step 5
         # Eqn (74)
-        piNp = self.pi * (1./np.sqrt(2*np.pi*self.tausqr)
+        piNp = self.pi * (1.0/np.sqrt(2.0*np.pi*self.tausqr)
                           * np.exp(-0.5 * (self.xi[:,np.newaxis] - self.mu)**2 / self.tausqr))
         q_ki = piNp / np.sum(piNp, axis=1)[:,np.newaxis]
         # Eqn (73)
@@ -159,7 +158,7 @@ class LinMix(object):
 
     def update_sigsqr(self): # Step 7
         # Eqn (80)
-        ssqr = 1./(self.N-2) * np.sum((self.eta - self.alpha - self.beta * self.xi)**2)
+        ssqr = 1.0/(self.N-2) * np.sum((self.eta - self.alpha - self.beta * self.xi)**2)
         # Eqn (79)
         nu = self.N - 2
         # Eqn (78)
@@ -176,9 +175,9 @@ class LinMix(object):
         for k in xrange(self.K):
             if self.nk[k] != 0:
                 # Eqn (86)
-                Sigma_muhat_k = 1./(1./self.usqr + self.nk[k]/self.tausqr[k])
+                Sigma_muhat_k = 1.0/(1.0/self.usqr + self.nk[k]/self.tausqr[k])
                 # Eqn (85)
-                xibar_k = 1/self.nk[k] * Gsum[k]
+                xibar_k = 1.0/self.nk[k] * Gsum[k]
                 # Eqn (84)
                 muhat_k = Sigma_muhat_k * (self.mu0/self.usqr + self.nk[k]/self.tausqr[k]*xibar_k)
                 # Eqn (83)
@@ -190,13 +189,13 @@ class LinMix(object):
         # Eqn (88)
         nu_k = self.nk + 1
         # Eqn (89)
-        tk_sqr = 1./nu_k * (self.wsqr + np.sum(self.G*(self.xi[:,np.newaxis]-self.mu)**2, axis=0))
+        tk_sqr = 1.0/nu_k * (self.wsqr + np.sum(self.G*(self.xi[:,np.newaxis]-self.mu)**2, axis=0))
         # Eqn (87)
-        self.tausqr = tk_sqr * nu_k / np.random.chisquare(nu_k)
+        self.tausqr = tk_sqr * nu_k / np.random.chisquare(nu_k, size=self.K)
 
     def update_mu0(self): # Step 11
         # Eqn (94)
-        mubar = np.mean(self.mu) 
+        mubar = np.mean(self.mu)
         # Eqn (93)
         self.mu0 = np.random.normal(loc=mubar, scale=np.sqrt(self.usqr/self.K))
 
@@ -204,20 +203,48 @@ class LinMix(object):
         # Eqn (96)
         nu_u = self.K + 1
         # Eqn (97)
-        usqrhat = 1./nu_u * (self.wsqr + np.sum((self.mu - self.mu0)**2))
-        success=False
-        while not success:
+        usqrhat = 1.0/nu_u * (self.wsqr + np.sum((self.mu - self.mu0)**2))
+        usqr = np.inf
+        while not usqr <= self.usqrmax:
             usqr = usqrhat * nu_u / np.random.chisquare(nu_u)
-            success = usqr <= self.usqrmax
         self.usqr = usqr
 
     def update_wsqr(self): # Step 13
         # Eqn (102)
         a = 0.5 * (self.K + 3)
         # Eqn (103)
-        b = 0.5 * (1./self.usqr + np.sum(1./self.tausqr))
+        b = 0.5 * (1.0/self.usqr + np.sum(1.0/self.tausqr))
         # Eqn (101)
-        self.wsqr = np.random.gamma(a, 1./b)
+        self.wsqr = np.random.gamma(a, 1.0/b)
+
+    def initialize_chain(self, chain_length):
+        self.chain_dtype = [('alpha', float),
+                            ('beta', float),
+                            ('sigsqr', float),
+                            ('pi', (float, self.K)),
+                            ('mu', (float, self.K)),
+                            ('tausqr', (float, self.K)),
+                            ('mu0', float),
+                            ('usqr', float),
+                            ('wsqr', float),
+                            ('ximean', float),
+                            ('xisig', float)]
+        self.chain = np.empty((chain_length,), dtype=self.chain_dtype)
+        self.ichain = 0
+
+    def update_chain(self):
+        self.chain['alpha'][self.ichain] = self.alpha
+        self.chain['beta'][self.ichain] = self.beta
+        self.chain['sigsqr'][self.ichain] = self.sigsqr
+        self.chain['pi'][self.ichain] = self.pi
+        self.chain['mu'][self.ichain] = self.mu
+        self.chain['tausqr'][self.ichain] = self.tausqr
+        self.chain['mu0'][self.ichain] = self.mu0
+        self.chain['usqr'][self.ichain] = self.usqr
+        self.chain['wsqr'][self.ichain] = self.wsqr
+        self.chain['ximean'][self.ichain] = np.mean(self.xi)
+        self.chain['xisig'][self.ichain] = np.std(self.xi)
+        self.ichain += 1
 
     def step(self):
         self.update_xi()
@@ -231,23 +258,10 @@ class LinMix(object):
         self.update_mu0()
         self.update_usqr()
         self.update_wsqr()
-        if not hasattr(self, 'chain'):
-            self.chain = Table(names=['alpha', 'beta', 'sigsqr', 
-                                      'pi', 'mu', 'tausqr', 
-                                      'mu0', 'usqr', 'wsqr', 
-                                      'ximean', 'xisig'], 
-                               dtype=(float, float, float, 
-                                      (float, 3), (float, 3), (float, 3),
-                                      float, float, float,
-                                      float, float))
-        d = [self.alpha, self.beta, self.sigsqr, 
-             self.pi, self.mu, self.tausqr, 
-             self.mu0, self.usqr, self.wsqr, 
-             np.mean(self.xi), np.std(self.xi)]
-        self.chain.add_row(d)
-
+        self.update_chain()
 
     def run_mcmc(self, niter):
+        self.initialize_chain(niter)
         with ProgressBar(niter) as bar:
             for i in xrange(niter):
                 self.step()
@@ -264,7 +278,7 @@ def dump_test_data():
     alpha = 4.0
     beta = 3.0
     sigsqr = 0.5
-    
+
     # GMM with 3 components for xi
     xi = np.random.normal(loc=1.0, scale=1.0, size=9)
     xi = np.concatenate([xi, np.random.normal(loc=2.0, scale=1.5, size=20)])
@@ -274,7 +288,7 @@ def dump_test_data():
     ysig = np.ones_like(eta) * 0.5
     x = np.random.normal(loc=xi, scale=xsig)
     y = np.random.normal(loc=eta, scale=ysig)
-    
+
     out = Table([x, y, xsig, ysig], names=['x', 'y', 'xsig', 'ysig'])
     import astropy.io.ascii as ascii
     ascii.write(out, 'test.dat')

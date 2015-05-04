@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 pyout = ascii.read('test.pyout')
 idlout = ascii.read('test.idlout')
 
-fig, axarr = plt.subplots(8, 8, figsize=(15, 15))
+fig, axarr = plt.subplots(8, 8, figsize=(10, 10))
 triangle.corner(np.array([pyout['alpha'], pyout['beta'], pyout['sigsqr'], 
                           pyout['mu0'], pyout['usqr'], pyout['wsqr'],
                           pyout['ximean'], pyout['xisig']]).T, 
