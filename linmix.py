@@ -3,13 +3,20 @@ from astropy.table import Table, Column
 from astropy.utils.console import ProgressBar
 
 class LinMix(object):
-    def __init__(self, x, y, xsig, ysig, K=3):
+    def __init__(self, x, y, xsig, ysig, xycov=None, K=3):
         self.x = np.array(x)
         self.y = np.array(y)
         self.xsig = np.array(xsig)
         self.ysig = np.array(ysig)
         self.N = len(self.x)
         self.K = K
+        if xycov is None:
+            self.xycov = np.zeros_like(self.x)
+        else:
+            self.xycov = np.array(xycov)
+        self.xycorr = self.xycov / (self.xsig * self.ysig)
+        self.xvar = self.xsig**2
+        self.yvar = self.ysig**2
 
     def report_all(self):
         print
@@ -32,18 +39,21 @@ class LinMix(object):
         y = self.y
         xsig = self.xsig
         ysig = self.ysig
+        xycov = self.xycov
+        xycorr = self.xycorr
+        xvar = self.xvar
+        yvar = self.yvar
         N = self.N
         K = self.K
 
-        xvar = xsig**2
-        yvar = ysig**2
-
         # Use BCES estimator for initial guess of theta = {alpha, beta, sigsqr}
-        self.beta = np.cov(x, y, ddof=1)[1,0] / (np.var(x, ddof=1) - np.mean(xvar))
+        self.beta = ((np.cov(x, y, ddof=1)[1,0] - np.mean(xycov)) 
+                     / (np.var(x, ddof=1) - np.mean(xvar)))
         self.alpha = np.mean(y) - self.beta * np.mean(x)
-        self.sigsqr = np.var(y, ddof=1) - np.mean(yvar) - self.beta * np.cov(x, y, ddof=1)[1,0]
-        self.sigsqr = np.max([self.sigsqr, 0.05 * np.var(y - self.alpha - self.beta * x,
-                                                         ddof=1)])
+        self.sigsqr = np.var(y, ddof=1) - np.mean(yvar) - self.beta * (np.cov(x, y, ddof=1)[1,0] 
+                                                                       - np.mean(xycov))
+        self.sigsqr = np.max([self.sigsqr, 
+                              0.05 * np.var(y - self.alpha - self.beta * x, ddof=1)])
 
         self.mu0 = np.median(x)
         self.wsqr = np.var(x, ddof=1) - np.median(xvar)
@@ -99,36 +109,33 @@ class LinMix(object):
 
     def update_xi(self): # Step 3
         # Eqn (58)
-        sigma_xihat_ik_sqr_inv = np.zeros((self.N, self.K), dtype=float)
-        if self.xsig is not None:
-            rho_xy_sqr = 0.0
-            sigma_xihat_ik_sqr_inv += 1./(self.xsig[:,np.newaxis]**2*(1-rho_xy_sqr))
-        sigma_xihat_ik_sqr_inv += self.beta**2 / self.sigsqr + 1./self.tausqr
-        sigma_xihat_ik_sqr = 1./sigma_xihat_ik_sqr_inv
+        sigma_xihat_ik_sqr = 1./(1./(self.xvar * (1 - self.xycorr**2))[:,np.newaxis]
+                                 + self.beta**2 / self.sigsqr 
+                                 + 1./self.tausqr)
         # Eqn (57)
         sigma_xihat_i_sqr = np.sum(self.G * sigma_xihat_ik_sqr, axis=1)
         # Eqn (56)
-        xihat_xy_i = self.x + 0
+        xihat_xy_i = self.x + self.xycov / self.yvar * (self.eta - self.y)
         # Eqn (55)
-        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis] * ((xihat_xy_i/self.xsig**2)[:,np.newaxis]
-                                                       + self.beta*(self.eta[:,np.newaxis] 
-                                                                    - self.alpha)/self.sigsqr
-                                                       + self.mu/self.tausqr))
+        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis] 
+                    * ((xihat_xy_i/self.xvar * (1.0 - self.xycorr**2))[:,np.newaxis]
+                       + self.beta*(self.eta[:,np.newaxis] - self.alpha)/self.sigsqr
+                       + self.mu/self.tausqr))
         # Eqn (54)
         xihat_i = np.sum(self.G * xihat_ik, axis=1)
         # Eqn (53)
-        self.xi = np.random.normal(loc=xihat_i, scale=np.sqrt(sigma_xihat_i_sqr), size=self.N)
+        self.xi = np.random.normal(loc=xihat_i, scale=np.sqrt(sigma_xihat_i_sqr))
 
     def update_eta(self): # Step 4
         # Eqn (68)
-        rho_xy_i_sqr = 0.0
-        sigma_etahat_i_sqr_inv = 1.0 / (self.ysig**2 * (1 - rho_xy_i_sqr)) + 1./self.sigsqr
-        sigma_etahat_i_sqr = 1./sigma_etahat_i_sqr_inv
+        sigma_etahat_i_sqr = 1./(1./(self.yvar*(1.0 - self.xycorr**2)) + 1./self.sigsqr)
         # Eqn (67)
-        etahat_i = sigma_etahat_i_sqr * ((self.y + 0.0) / (self.ysig**2 * (1.0 - rho_xy_i_sqr))
-                                         + (self.alpha + self.beta*self.xi)/self.sigsqr)
+        etahat_i = (sigma_etahat_i_sqr 
+                    * ((self.y + self.xycov * (self.xi - self.x)/self.xvar) 
+                       / (self.yvar * (1.0 - self.xycorr**2))
+                       + (self.alpha + self.beta * self.xi) / self.sigsqr))
         # Eqn (66)
-        self.eta = np.random.normal(loc=etahat_i, scale=np.sqrt(sigma_etahat_i_sqr), size=self.N)
+        self.eta = np.random.normal(loc=etahat_i, scale=np.sqrt(sigma_etahat_i_sqr))
 
     def update_G(self): # Step 5
         # Eqn (74)
