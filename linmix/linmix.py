@@ -317,7 +317,7 @@ class LinMix(object):
         for c in self.chains:
             c.step(niter)
 
-    def run_mcmc(self, miniter=5000, maxiter=100000, silent=False):
+    def run_mcmc(self, miniter=1000, maxiter=100000, silent=False):
         checkiter = 100
         for c in self.chains:
             c.initial_guess()
@@ -345,3 +345,6 @@ class LinMix(object):
                 print "Rhat values for alpha, beta, log(sigma^2), mean(xi), log(var(xi)), atanh(corr(xi, eta)):"
                 print Rhat
                 i += checkiter
+
+        # Throw away first half of each chain
+        self.chain = np.hstack([c.chain[0:i/2] for c in self.chains])

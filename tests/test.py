@@ -34,5 +34,4 @@ if __name__ == '__main__':
 
     lm = linmix.LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
     lm.run_mcmc()
-    print lm.chains
-    #ascii.write(lm.chain, 'test.pyout')
+    ascii.write(lm.chain, 'test.pyout')
