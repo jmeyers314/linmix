@@ -23,8 +23,7 @@ def generate_test_data():
     import astropy.io.ascii as ascii
     ascii.write(out, 'test.dat')
 
-
-if __name__ == '__main__':
+def run():
     import astropy.io.ascii as ascii
     try:
         a = ascii.read('test.dat')
@@ -35,3 +34,6 @@ if __name__ == '__main__':
     lm = linmix.LinMix(a['x'], a['y'], a['xsig'], a['ysig'])
     lm.run_mcmc()
     ascii.write(lm.chain, 'test.pyout')
+
+if __name__ == '__main__':
+    run()
