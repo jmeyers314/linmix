@@ -13,11 +13,11 @@ triangle.corner(np.array([pyout['alpha'], pyout['beta'], pyout['sigsqr'],
                 labels=[r"$\alpha$", r"$\beta$", r"$\sigma^2$", 
                         r"$\mu_0$", r"$u^2$", r"$w^2$",
                         r"$\bar{\xi}$", r"$\sigma_\xi$", r"$\rho_{\xi\eta}$"],
-                extents=[0.99]*9,
+                extents=[0.99]*9, plot_datapoints=False,
                 fig=fig)
 triangle.corner(np.array([idlout['alpha'], idlout['beta'], idlout['sigsqr'], 
                           idlout['mu0'], idlout['usqr'], idlout['wsqr'],
                           idlout['ximean'], idlout['xisig'], idlout['corr']]).T, 
-                extents=[0.99]*9,
+                extents=[0.99]*9, plot_datapoints=False,
                 fig=fig, color='r')
 plt.show()
