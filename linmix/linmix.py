@@ -33,6 +33,7 @@ class Chain(object):
 
         self.N = len(self.x)
         self.K = K
+        self.nchains = nchains
 
         self.xvar = self.xsig**2
         self.yvar = self.ysig**2
@@ -70,7 +71,7 @@ class Chain(object):
         X[:,1] = x
         Sigma = np.linalg.inv(np.dot(X.T, X)) * self.sigsqr
         coef = np.random.multivariate_normal([0, 0], Sigma)
-        chisqr = np.random.chisquare(1)
+        chisqr = np.random.chisquare(self.nchains)
         self.alpha += coef[0] * np.sqrt(1.0/chisqr)
         self.beta += coef[1] * np.sqrt(1.0/chisqr)
         self.sigsqr *= 0.5 * N / np.random.chisquare(0.5*N)
@@ -82,7 +83,7 @@ class Chain(object):
         mu0g = np.nan
         while not (mu0g > self.mu0min) & (mu0g < self.mu0max):
             mu0g = self.mu0 + (np.random.normal(scale=np.sqrt(np.var(x, ddof=1) / N)) /
-                               np.sqrt(1.0/np.random.chisquare(1.0)))
+                               np.sqrt(self.nchains/np.random.chisquare(self.nchains)))
         self.mu0 = mu0g
 
         # wsqr is the global scale
@@ -91,7 +92,7 @@ class Chain(object):
         self.usqrmax = 1.5 * np.var(x, ddof=1)
         self.usqr = 0.5 * np.var(x, ddof=1)
 
-        self.tausqr = 0.5 * self.wsqr / np.random.chisquare(1.0, size=K)
+        self.tausqr = 0.5 * self.wsqr * self.nchains / np.random.chisquare(self.nchains, size=K)
 
         self.mu = self.mu0 + np.random.normal(scale=np.sqrt(self.wsqr), size=K)
 
