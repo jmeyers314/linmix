@@ -19,6 +19,12 @@ def generate_test_data():
     x = np.random.normal(loc=xi, scale=xsig)
     y = np.random.normal(loc=eta, scale=ysig)
 
+    # And put in zero uncertainty in a few of these.
+    wzx = np.random.choice(np.arange(len(xi)), size=5, replace=False)
+    xsig[wzx] = 0.0
+    wzy = np.random.choice(np.arange(len(eta)), size=5, replace=False)
+    ysig[wzy] = 0.0
+
     out = Table([x, y, xsig, ysig], names=['x', 'y', 'xsig', 'ysig'])
     import astropy.io.ascii as ascii
     ascii.write(out, 'test.dat')

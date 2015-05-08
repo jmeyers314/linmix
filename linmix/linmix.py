@@ -2,18 +2,41 @@ import numpy as np
 from astropy.table import Table, Column
 
 class Chain(object):
-    def __init__(self, x, y, xsig, ysig, xycov, K,
-                 xycorr, xvar, yvar):
-        self.x = x
-        self.y = y
-        self.xsig = xsig
-        self.ysig = ysig
-        self.xycov = xycov
-        self.K = K
-        self.xycorr = xycorr
-        self.xvar = xvar
-        self.yvar = yvar
+    def __init__(self, x, y, xsig, ysig, xycov, K, nchains):
+        self.x = np.array(x, dtype=float)
+        self.y = np.array(y, dtype=float)
+
+        if xsig is None:
+            self.xsig = np.zeros_like(self.x)
+            xycov = np.zeros_like(self.x)
+        else:
+            self.xsig = np.array(xsig, dtype=float)
+        if ysig is None:
+            self.ysig = np.zeros_like(self.y)
+            xycov = np.zeros_like(self.y)
+        else:
+            self.ysig = np.array(ysig, dtype=float)
+        self.wxnoerr = (self.xsig == 0.0)
+        self.wynoerr = (self.ysig == 0.0)
+        self.wnoerrs = self.wxnoerr & self.wynoerr
+        self.wxerr = np.logical_not(self.wxnoerr)
+        self.wyerr = np.logical_not(self.wynoerr)
+        self.werrs = werrs = self.wxerr & self.wyerr
+
+        if xycov is None:
+            self.xycov = np.zeros_like(self.x)
+        else:
+            self.xycov = np.array(xycov, dtype=float)
+
+        self.xycorr = np.zeros_like(self.xycov)
+        self.xycorr[werrs] = self.xycov[werrs] / (self.xsig[werrs] * self.ysig[werrs])
+
         self.N = len(self.x)
+        self.K = K
+
+        self.xvar = self.xsig**2
+        self.yvar = self.ysig**2
+
         self.initialized = False
 
     def initial_guess(self): # Step 1
@@ -86,40 +109,60 @@ class Chain(object):
                 self.G[i,minind] = 1
             self.pi = np.random.dirichlet(pig+1)
 
-        self.eta = y
-        self.xi = x
+        self.eta = y.copy()
+        self.xi = x.copy()
 
         self.initialized = True
 
     def update_xi(self): # Step 3
+        wxerr = self.wxerr
+        wyerr = self.wyerr
         # Eqn (58)
-        sigma_xihat_ik_sqr = 1.0/(1.0/(self.xvar * (1.0 - self.xycorr**2))[:,np.newaxis]
+        sigma_xihat_ik_sqr = np.empty((self.N, self.K), dtype=float)
+        sigma_xihat_ik_sqr[wxerr] = 1.0/(1.0/(self.xvar[wxerr] 
+                                              * (1.0 - self.xycorr[wxerr]**2))[:,np.newaxis]
                                   + self.beta**2 / self.sigsqr
                                   + 1.0/self.tausqr)
         # Eqn (57)
-        sigma_xihat_i_sqr = np.sum(self.G * sigma_xihat_ik_sqr, axis=1)
+        sigma_xihat_i_sqr = np.empty((self.N), dtype=float)
+        sigma_xihat_i_sqr[wxerr] = np.sum(self.G[wxerr] * sigma_xihat_ik_sqr[wxerr], axis=1)
         # Eqn (56)
-        xihat_xy_i = self.x + self.xycov / self.yvar * (self.eta - self.y)
+        xihat_xy_i = self.x.copy()
+        xihat_xy_i[wyerr] += (self.xycov[wyerr] / self.yvar[wyerr] 
+                              * (self.eta[wyerr] - self.y[wyerr]))
         # Eqn (55)
-        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis]
-                    * ((xihat_xy_i/self.xvar * (1.0 - self.xycorr**2))[:,np.newaxis]
-                       + self.beta*(self.eta[:,np.newaxis] - self.alpha)/self.sigsqr
-                       + self.mu/self.tausqr))
+        xihat_ik = np.empty((self.N, self.K), dtype=float)
+        xihat_ik[wxerr] = (sigma_xihat_i_sqr[wxerr,np.newaxis]
+                           * ((xihat_xy_i[wxerr]/self.xvar[wxerr] 
+                               * (1.0 - self.xycorr[wxerr]**2))[:,np.newaxis]
+                              + self.beta*(self.eta[wxerr,np.newaxis] - self.alpha)/self.sigsqr
+                              + self.mu/self.tausqr))
         # Eqn (54)
-        xihat_i = np.sum(self.G * xihat_ik, axis=1)
+        xihat_i = np.empty_like(self.xi)
+        xihat_i[wxerr] = np.sum(self.G[wxerr] * xihat_ik[wxerr], axis=1)
         # Eqn (53)
-        self.xi = np.random.normal(loc=xihat_i, scale=np.sqrt(sigma_xihat_i_sqr))
+        self.xi[wxerr] = np.random.normal(loc=xihat_i[wxerr], 
+                                          scale=np.sqrt(sigma_xihat_i_sqr[wxerr]))
 
     def update_eta(self): # Step 4
+        wxerr = self.wxerr
+        wyerr = self.wyerr
+
+        etaxyvar = self.yvar * (1.0 - self.xycorr**2)
+        etaxy = self.y.copy()
+        etaxy[wxerr] += self.xycov[wxerr] / self.xvar[wxerr] * (self.xi - self.x)[wxerr]
+
         # Eqn (68)
-        sigma_etahat_i_sqr = 1.0/(1.0/(self.yvar*(1.0 - self.xycorr**2)) + 1.0/self.sigsqr)
+        sigma_etahat_i_sqr = np.empty_like(self.eta)
+        sigma_etahat_i_sqr[wyerr] = 1.0/(1.0/etaxyvar[wyerr] + 1.0/self.sigsqr)
         # Eqn (67)
-        etahat_i = (sigma_etahat_i_sqr
-                    * ((self.y + self.xycov * (self.xi - self.x)/self.xvar)
-                       / (self.yvar * (1.0 - self.xycorr**2))
-                       + (self.alpha + self.beta * self.xi) / self.sigsqr))
+        etahat_i = np.empty_like(self.eta)
+        etahat_i[wyerr] = (sigma_etahat_i_sqr[wyerr] 
+                           * (etaxy[wyerr] / etaxyvar[wyerr]
+                              + (self.alpha + self.beta * self.xi[wyerr]) / self.sigsqr))
         # Eqn (66)
-        self.eta = np.random.normal(loc=etahat_i, scale=np.sqrt(sigma_etahat_i_sqr))
+        self.eta[wyerr] = np.random.normal(loc=etahat_i[wyerr], 
+                                           scale=np.sqrt(sigma_etahat_i_sqr[wyerr]))
 
     def update_G(self): # Step 5
         # Eqn (74)
@@ -257,23 +300,10 @@ class Chain(object):
 
 
 class LinMix(object):
-    def __init__(self, x, y, xsig, ysig, xycov=None, K=3, nchains=4):
-        self.x = np.array(x, dtype=float)
-        self.y = np.array(y, dtype=float)
-        self.xsig = np.array(xsig, dtype=float)
-        self.ysig = np.array(ysig, dtype=float)
-        self.N = len(self.x)
-        self.K = K
-        if xycov is None:
-            self.xycov = np.zeros_like(self.x)
-        else:
-            self.xycov = np.array(xycov, dtype=float)
-        self.xycorr = xycorr = self.xycov / (self.xsig * self.ysig)
-        self.xvar = xvar = self.xsig**2
-        self.yvar = yvar = self.ysig**2
+    def __init__(self, x, y, xsig=None, ysig=None, xycov=None, K=3, nchains=4):
         self.nchains = nchains
-        self.chains = [Chain(self.x, self.y, self.xsig, self.ysig, self.xycov, self.K,
-                             self.xycorr, self.xvar, self.yvar) for i in range(self.nchains)]
+        self.chains = [Chain(x, y, xsig, ysig, xycov, K, self.nchains) 
+                       for i in xrange(self.nchains)]
 
     def get_psi(self):
         c0 = self.chains[0]
@@ -317,7 +347,7 @@ class LinMix(object):
         for c in self.chains:
             c.step(niter)
 
-    def run_mcmc(self, miniter=5000, maxiter=100000, silent=False):
+    def run_mcmc(self, miniter=5000, maxiter=10000, silent=False):
         checkiter = 100
         for c in self.chains:
             c.initial_guess()
@@ -334,7 +364,7 @@ class LinMix(object):
                 print Rhat
 
         i += checkiter
-        while not np.all(Rhat < 1.1):
+        while not np.all(Rhat < 1.1) and (i < maxiter):
             for c in self.chains:
                 c.extend_chain(checkiter)
                 c.step(checkiter)
