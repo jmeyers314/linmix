@@ -127,7 +127,6 @@ class Chain(object):
                 self.y[i] = np.random.normal(loc=self.eta[i], scale=np.sqrt(self.yvar[i]))
 
     def update_xi(self): # Step 3
-        old_settings = np.seterr(divide='ignore', invalid='ignore')
         wxerr = self.wxerr
         wyerr = self.wyerr
 
@@ -142,16 +141,15 @@ class Chain(object):
         xihat_xy_i[wyerr] += (self.xycov / self.yvar * (self.eta - self.y))[wyerr]
         # Eqn (55)
         xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis]
-                           * ((xihat_xy_i/self.xvar 
+                           * ((xihat_xy_i/self.xvar
                                * (1.0 - self.xycorr**2))[:,np.newaxis]
                               + self.beta*(self.eta[:,np.newaxis] - self.alpha)/self.sigsqr
                               + self.mu/self.tausqr))
         # Eqn (54)
         xihat_i = np.sum(self.G * xihat_ik, axis=1)
         # Eqn (53)
-        self.xi[wxerr] = np.random.normal(loc=xihat_i[wxerr], 
+        self.xi[wxerr] = np.random.normal(loc=xihat_i[wxerr],
                                           scale=np.sqrt(sigma_xihat_i_sqr[wxerr]))
-        np.seterr(**old_settings)
 
     def update_eta(self): # Step 4
         wxerr = self.wxerr
@@ -159,18 +157,15 @@ class Chain(object):
 
         etaxyvar = self.yvar * (1.0 - self.xycorr**2)
         etaxy = self.y.copy()
-        etaxy[wxerr] += self.xycov[wxerr] / self.xvar[wxerr] * (self.xi - self.x)[wxerr]
+        etaxy[wxerr] += (self.xycov / self.xvar * (self.xi - self.x))[wxerr]
 
         # Eqn (68)
-        sigma_etahat_i_sqr = np.empty_like(self.eta)
-        sigma_etahat_i_sqr[wyerr] = 1.0/(1.0/etaxyvar[wyerr] + 1.0/self.sigsqr)
+        sigma_etahat_i_sqr = 1.0/(1.0/etaxyvar + 1.0/self.sigsqr)
         # Eqn (67)
-        etahat_i = np.empty_like(self.eta)
-        etahat_i[wyerr] = (sigma_etahat_i_sqr[wyerr] 
-                           * (etaxy[wyerr] / etaxyvar[wyerr]
-                              + (self.alpha + self.beta * self.xi[wyerr]) / self.sigsqr))
+        etahat_i = (sigma_etahat_i_sqr * (etaxy / etaxyvar
+                       + (self.alpha + self.beta * self.xi) / self.sigsqr))
         # Eqn (66)
-        self.eta[wyerr] = np.random.normal(loc=etahat_i[wyerr], 
+        self.eta[wyerr] = np.random.normal(loc=etahat_i[wyerr],
                                            scale=np.sqrt(sigma_etahat_i_sqr[wyerr]))
 
     def update_G(self): # Step 5
@@ -295,8 +290,10 @@ class Chain(object):
     def step(self, niter):
         for i in xrange(niter):
             self.update_cens_y()
+            old_settings = np.seterr(divide='ignore', invalid='ignore')
             self.update_xi()
             self.update_eta()
+            np.seterr(**old_settings)
             self.update_G()
             self.update_alpha_beta()
             self.update_sigsqr()
@@ -312,7 +309,7 @@ class Chain(object):
 class LinMix(object):
     def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3, nchains=4):
         self.nchains = nchains
-        self.chains = [Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains) 
+        self.chains = [Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains)
                        for i in xrange(self.nchains)]
 
     def get_psi(self):
