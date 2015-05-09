@@ -16,8 +16,9 @@ triangle.corner(np.array([pyout['alpha'], pyout['beta'], pyout['sigsqr'],
                 extents=[0.99]*9, plot_datapoints=False,
                 fig=fig)
 triangle.corner(np.array([idlout['alpha'], idlout['beta'], idlout['sigsqr'], 
-                          idlout['mu0'], idlout['usqr'], idlout['wsqr'],
+                          idlout['mu00'], idlout['usqr'], idlout['wsqr'],
                           idlout['ximean'], idlout['xisig'], idlout['corr']]).T, 
                 extents=[0.99]*9, plot_datapoints=False,
                 fig=fig, color='r')
+fig.subplots_adjust(bottom=0.065, left=0.07)
 plt.show()

@@ -42,8 +42,8 @@ axarr[0,1].set_ylabel('beta')
 axarr[1,0].plot(idlout['sigsqr'])
 axarr[1,0].set_ylabel('sigsqr')
 
-axarr[1,1].plot(idlout['mu0'])
-axarr[1,1].set_ylabel('mu0')
+axarr[1,1].plot(idlout['mu00'])
+axarr[1,1].set_ylabel('mu00')
 
 axarr[2,0].plot(idlout['usqr'])
 axarr[2,0].set_ylabel('usqr')

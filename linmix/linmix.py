@@ -2,7 +2,7 @@ import numpy as np
 from astropy.table import Table, Column
 
 class Chain(object):
-    def __init__(self, x, y, xsig, ysig, xycov, K, nchains):
+    def __init__(self, x, y, xsig, ysig, xycov, delta, K, nchains):
         self.x = np.array(x, dtype=float)
         self.y = np.array(y, dtype=float)
 
@@ -37,6 +37,11 @@ class Chain(object):
 
         self.xvar = self.xsig**2
         self.yvar = self.ysig**2
+
+        if delta is None:
+            self.delta = np.ones((self.N), dtype=bool)
+        else:
+            self.delta = np.array(delta, dtype=bool)
 
         self.initialized = False
 
@@ -111,9 +116,18 @@ class Chain(object):
             self.pi = np.random.dirichlet(pig+1)
 
         self.eta = y.copy()
+        self.y_ul = y.copy()
         self.xi = x.copy()
 
+        self.cens = np.transpose(np.nonzero(np.logical_not(self.delta)))
+
         self.initialized = True
+
+    def update_cens_y(self): # Step 2
+        for i in self.cens:
+            self.y[i] = np.random.normal(loc=self.eta[i], scale=np.sqrt(self.yvar[i]))
+            while self.y[i] > self.y_ul[i]:
+                self.y[i] = np.random.normal(loc=self.eta[i], scale=np.sqrt(self.yvar[i]))
 
     def update_xi(self): # Step 3
         wxerr = self.wxerr
@@ -286,6 +300,7 @@ class Chain(object):
 
     def step(self, niter):
         for i in xrange(niter):
+            self.update_cens_y()
             self.update_xi()
             self.update_eta()
             self.update_G()
@@ -301,9 +316,9 @@ class Chain(object):
 
 
 class LinMix(object):
-    def __init__(self, x, y, xsig=None, ysig=None, xycov=None, K=3, nchains=4):
+    def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3, nchains=4):
         self.nchains = nchains
-        self.chains = [Chain(x, y, xsig, ysig, xycov, K, self.nchains) 
+        self.chains = [Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains) 
                        for i in xrange(self.nchains)]
 
     def get_psi(self):
