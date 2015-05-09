@@ -127,6 +127,7 @@ class Chain(object):
                 self.y[i] = np.random.normal(loc=self.eta[i], scale=np.sqrt(self.yvar[i]))
 
     def update_xi(self): # Step 3
+        old_settings = np.seterr(divide='ignore', invalid='ignore')
         wxerr = self.wxerr
         wyerr = self.wyerr
 
@@ -150,6 +151,7 @@ class Chain(object):
         # Eqn (53)
         self.xi[wxerr] = np.random.normal(loc=xihat_i[wxerr], 
                                           scale=np.sqrt(sigma_xihat_i_sqr[wxerr]))
+        np.seterr(**old_settings)
 
     def update_eta(self): # Step 4
         wxerr = self.wxerr
