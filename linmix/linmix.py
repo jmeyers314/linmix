@@ -16,11 +16,8 @@ class Chain(object):
             xycov = np.zeros_like(self.y)
         else:
             self.ysig = np.array(ysig, dtype=float)
-        self.wxnoerr = (self.xsig == 0.0)
-        self.wynoerr = (self.ysig == 0.0)
-        self.wnoerrs = self.wxnoerr & self.wynoerr
-        self.wxerr = np.logical_not(self.wxnoerr)
-        self.wyerr = np.logical_not(self.wynoerr)
+        self.wxerr = (self.xsig != 0.0)
+        self.wyerr = (self.ysig != 0.0)
         self.werrs = werrs = self.wxerr & self.wyerr
 
         if xycov is None:
@@ -132,29 +129,24 @@ class Chain(object):
     def update_xi(self): # Step 3
         wxerr = self.wxerr
         wyerr = self.wyerr
+
         # Eqn (58)
-        sigma_xihat_ik_sqr = np.empty((self.N, self.K), dtype=float)
-        sigma_xihat_ik_sqr[wxerr] = 1.0/(1.0/(self.xvar[wxerr] 
-                                              * (1.0 - self.xycorr[wxerr]**2))[:,np.newaxis]
+        sigma_xihat_ik_sqr = 1.0/(1.0/(self.xvar * (1.0 - self.xycorr**2))[:,np.newaxis]
                                   + self.beta**2 / self.sigsqr
                                   + 1.0/self.tausqr)
         # Eqn (57)
-        sigma_xihat_i_sqr = np.empty((self.N), dtype=float)
-        sigma_xihat_i_sqr[wxerr] = np.sum(self.G[wxerr] * sigma_xihat_ik_sqr[wxerr], axis=1)
+        sigma_xihat_i_sqr = np.sum(self.G * sigma_xihat_ik_sqr, axis=1)
         # Eqn (56)
         xihat_xy_i = self.x.copy()
-        xihat_xy_i[wyerr] += (self.xycov[wyerr] / self.yvar[wyerr] 
-                              * (self.eta[wyerr] - self.y[wyerr]))
+        xihat_xy_i[wyerr] += (self.xycov / self.yvar * (self.eta - self.y))[wyerr]
         # Eqn (55)
-        xihat_ik = np.empty((self.N, self.K), dtype=float)
-        xihat_ik[wxerr] = (sigma_xihat_i_sqr[wxerr,np.newaxis]
-                           * ((xihat_xy_i[wxerr]/self.xvar[wxerr] 
-                               * (1.0 - self.xycorr[wxerr]**2))[:,np.newaxis]
-                              + self.beta*(self.eta[wxerr,np.newaxis] - self.alpha)/self.sigsqr
+        xihat_ik = (sigma_xihat_i_sqr[:,np.newaxis]
+                           * ((xihat_xy_i/self.xvar 
+                               * (1.0 - self.xycorr**2))[:,np.newaxis]
+                              + self.beta*(self.eta[:,np.newaxis] - self.alpha)/self.sigsqr
                               + self.mu/self.tausqr))
         # Eqn (54)
-        xihat_i = np.empty_like(self.xi)
-        xihat_i[wxerr] = np.sum(self.G[wxerr] * xihat_ik[wxerr], axis=1)
+        xihat_i = np.sum(self.G * xihat_ik, axis=1)
         # Eqn (53)
         self.xi[wxerr] = np.random.normal(loc=xihat_i[wxerr], 
                                           scale=np.sqrt(sigma_xihat_i_sqr[wxerr]))
