@@ -363,7 +363,7 @@ class LinMix(object):
         for c in self.chains:
             c.step(niter)
 
-    def run_mcmc(self, miniter=5000, maxiter=10000, silent=False):
+    def run_mcmc(self, miniter=5000, maxiter=100000, silent=False):
         checkiter = 100
         for c in self.chains:
             c.initial_guess()
