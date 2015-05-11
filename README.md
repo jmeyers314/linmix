@@ -23,13 +23,14 @@ Convergence of the MCMC to the posterior is monitored using the potential scale 
 
 Usage
 -----
->>> import linmix
->>> lm = linmix.LinMix(x, y, xsig=xsig, ysig=ysig, xycov=xycov, delta=delta, K=K, nchains=nchains)
->>> lm.run_mcmc(miniter=miniter, maxiter=maxiter, silent=silent)
->>> print lm.chains['alpha'].mean(), lm.chains['alpha'].std()
->>> print lm.chains['beta'].mean(), lm.chains['beta'].std()
->>> print lm.chains['sigsqr'].mean(), lm.chains['sigsqr'].std()
-
+```
+import linmix
+lm = linmix.LinMix(x, y, xsig=xsig, ysig=ysig, xycov=xycov, delta=delta, K=K, nchains=nchains)
+lm.run_mcmc(miniter=miniter, maxiter=maxiter, silent=silent)
+print lm.chains['alpha'].mean(), lm.chains['alpha'].std()
+print lm.chains['beta'].mean(), lm.chains['beta'].std()
+print lm.chains['sigsqr'].mean(), lm.chains['sigsqr'].std()
+```
 Installation
 ------------
 Currently, the best way to get linmix for python is to clone from github and build using normal setup.py facilities.
