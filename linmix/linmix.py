@@ -1,5 +1,4 @@
 import numpy as np
-from astropy.table import Table, Column
 
 class Chain(object):
     def __init__(self, x, y, xsig, ysig, xycov, delta, K, nchains):
@@ -307,12 +306,48 @@ class Chain(object):
 
 
 class LinMix(object):
+    """ A class to perform linear regression of `y` on `x` when there are measurement errors in 
+    both variables.  The regression assumes:
+
+    eta = alpha + beta * xi + epsilon
+
+    x = xi + xerr
+
+    y = eta + yerr
+
+    Here, (`alpha`, `beta`) are the regression coefficients, `epsilon` is the intrinsic random 
+    scatter about the regression, `xerr` is the measurement error in `x`, and `yerr` is the 
+    measurement error in `y`.  `epsilon` is assumed to be normally-distributed with mean zero and 
+    variance `sigsqr`.  `xerr` and `yerr` are assumed to be normally-distributed with means equal 
+    to zero, variances `xsig`^2 and `ysig`^2, respectively, and covariance `xycov`. The 
+    distribution of `xi` is modelled as a mixture of normals, with group proportions `pi`, means 
+    `mu`, and variances `tausqr`.  
+
+    Params
+    ------
+    @param x      The observed independent variable.  This should be an NX-element array-like.
+    @param y      The observed dependent variable.  This should be an NX-element array-like.
+    @param xsig   The 1-sigma measurement errors in `x`, an NX-element array-like.  
+                  [Default: np.zeros_like(x)].
+    @param ysig   The 1-sigma measurement errors in `y`, an NX-element array-like.
+                  [Default: np.zeros_like(y)].
+    @param xycov  The covariance between the measurement errors in `x` and `y`, an 
+                  NX-element array-like.  [Default: np.zeros_like(x)].
+    @param delta  An NX-element array-like indicating whether a data point is censored or not.
+                  If delta[i] == 1, then the source is detected.  Otherwise, if delta[i] == 0, 
+                  then the source is not detected and y[i] should be an upper limit on y[i].
+                  Note that if there are censored data points, then the maximum-likelihood
+                  estimate (alpha, beta, sigsqr) is not valid.  By default, all data points are
+                  assumed to be detected.  [Default: np.ones((len(x),), dtype=bool)].
+    @param K      The number of Gaussians to use in the mixture model for the distribution of 
+                  `xi`.  [Default: 3].
+    """
     def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3, nchains=4):
         self.nchains = nchains
         self.chains = [Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains)
                        for i in xrange(self.nchains)]
 
-    def get_psi(self):
+    def _get_psi(self):
         c0 = self.chains[0]
         ndraw = c0.ichain/2
         psi = np.empty((ndraw, self.nchains, 6), dtype=float)
@@ -332,8 +367,8 @@ class LinMix(object):
         psi[:,:,5] = np.arctanh(beta * np.sqrt(xivar / (beta**2 * xivar + sigsqr)))
         return psi
 
-    def get_Rhat(self):
-        psi = self.get_psi()
+    def _get_Rhat(self):
+        psi = self._get_psi()
         ndraw = psi.shape[0]
         psibarj = np.sum(psi, axis=0)/ndraw
         psibar = np.mean(psibarj, axis=0)
@@ -344,17 +379,21 @@ class LinMix(object):
         Rhat = np.sqrt(varplus / Wvar)
         return Rhat
 
-    def step(self, niter):
-        for c in self.chains:
-            if not c.initialized:
-                c.initial_guess()
-                c.initialize_chain(niter)
-            else:
-                c.extend_chain(niter)
-        for c in self.chains:
-            c.step(niter)
-
     def run_mcmc(self, miniter=5000, maxiter=100000, silent=False):
+        """ Run the Markov Chain Monte Carlo for the LinMix object.
+
+        Bayesian inference is employed, and a Markov chain containing random draws from the 
+        posterior is developed.  Convergence of the MCMC to the posterior is monitored using the 
+        potential scale reduction factor (RHAT, Gelman et al. 2004). In general, when RHAT < 1.1 
+        then approximate convergence is reached.
+
+        @param miniter   The minimum number of iterations to use. [Default: 5000].
+        @param maxiter   The maximum number of iterations to use. [Default: 100000].
+        @param silent    Suppress updates during sampling.  [Default: False].
+
+        The chain output is stored as a numpy recarray in the `.chain` attribute of the calling 
+        object.
+        """
         checkiter = 100
         for c in self.chains:
             c.initial_guess()
@@ -362,7 +401,7 @@ class LinMix(object):
         for i in xrange(0, miniter, checkiter):
             for c in self.chains:
                 c.step(checkiter)
-            Rhat = self.get_Rhat()
+            Rhat = self._get_Rhat()
 
             if not silent:
                 print
@@ -375,7 +414,7 @@ class LinMix(object):
             for c in self.chains:
                 c.extend_chain(checkiter)
                 c.step(checkiter)
-            Rhat = self.get_Rhat()
+            Rhat = self._get_Rhat()
             if not silent:
                 print
                 print "Iteration: ", i+checkiter

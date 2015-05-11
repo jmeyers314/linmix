@@ -32,8 +32,8 @@ setup(
     url='https://github.com/jmeyers314/linmix_py',
 
     # Author details
-    author='Josh Meyers',
-    author_email='jmeyers314@gmail.com',
+    author='Joshua E. Meyers, Brandon C. Kelly',
+    author_email='jmeyers314@gmail.com, bcharleskelly@gmail.com',
 
     # Choose your license
     license='BSD',
@@ -69,7 +69,7 @@ setup(
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['astropy', 'numpy'],
+    install_requires=['numpy'],
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). You can install these using the following syntax,
