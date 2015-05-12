@@ -55,7 +55,7 @@ copyright = u'2015, Joshua E. Meyers'
 # built documents.
 #
 # The short X.Y version.
-version = '0.1.0.dev1'
+version = '0.1.0'
 # The full version, including alpha/beta/rc tags.
 release = '0.1.0.dev1'
 
