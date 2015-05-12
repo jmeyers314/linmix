@@ -1,3 +1,6 @@
+""" linmix -- A hierarchical Bayesian approach to linear regression with error in both X and Y.
+"""
+
 import numpy as np
 
 class Chain(object):
@@ -323,24 +326,44 @@ class LinMix(object):
     distribution of `xi` is modelled as a mixture of normals, with group proportions `pi`, means 
     `mu`, and variances `tausqr`.  
 
-    Params
-    ------
-    @param x      The observed independent variable.  This should be an NX-element array-like.
-    @param y      The observed dependent variable.  This should be an NX-element array-like.
-    @param xsig   The 1-sigma measurement errors in `x`, an NX-element array-like.  
-                  [Default: np.zeros_like(x)].
-    @param ysig   The 1-sigma measurement errors in `y`, an NX-element array-like.
-                  [Default: np.zeros_like(y)].
-    @param xycov  The covariance between the measurement errors in `x` and `y`, an 
-                  NX-element array-like.  [Default: np.zeros_like(x)].
-    @param delta  An NX-element array-like indicating whether a data point is censored or not.
-                  If delta[i] == 1, then the source is detected.  Otherwise, if delta[i] == 0, 
-                  then the source is not detected and y[i] should be an upper limit on y[i].
-                  Note that if there are censored data points, then the maximum-likelihood
-                  estimate (alpha, beta, sigsqr) is not valid.  By default, all data points are
-                  assumed to be detected.  [Default: np.ones((len(x),), dtype=bool)].
-    @param K      The number of Gaussians to use in the mixture model for the distribution of 
-                  `xi`.  [Default: 3].
+    Args:
+        x(array_like): The observed independent variable.
+        y(array_like): The observed dependent variable.
+        xsig(array_like): 1-sigma measurement errors in x.
+        ysig(array_like): 1-sigma measurement errors in y.
+        xycov(array_like): Covariance between the measurement errors in x and y.
+        delta(array_like): Array indicating whether a data point is censored (i.e., not detected), 
+            or not.  If delta[i] == 1, then the ith source is detected.  If delta[i] == 0, then 
+            the ith source is not detected and y[i] will be interpreted as an upper limit.  Note
+            that if there are censored data points, then the maximum-likelihood estiate 
+            (alpha, beta, sigsqr) is not valid.  By default, all data points are assumed to be 
+            detected.
+        K(int): The number of Gaussians to use in the mixture model for the distribution of xi.
+        nchains(int): The number of Monte Carlo Markov Chains to instantiate.
+
+    Attributes:
+        nchains(int): The number of instantiated MCMCs.
+        chain(numpy recarray): The concatenated MCMCs themselves.  Actually, only the concatenation 
+            of the last half of each chain is stored here after convergence is reached.  The 
+            recarray has the following dtype:
+                [('alpha', float), # The regression intercept.
+                 ('beta', float), # The regression slope.
+                 ('sigsqr', float), # The regression intrinsic scatter.
+                 ('pi', (float, K)), # The mixture model component fractions.
+                 ('mu', (float, K)), # The mixture model component means.
+                 ('tausqr', (float, K)), # The mixture model component variances.
+                 ('mu0', float), # The hyperparameter describing the prior mean of the distribution
+                                 # of mixture means.
+                 ('usqr', float), # The hyperparameter describing the prior variance of the 
+                                  # distribution of mixture means.
+                 ('wsqr', float), # The hyperparameter describing the `typical` scale for the prior
+                                  # on tausqr, usqr.
+                 ('ximean', float), # The mean of the distribution for the independent latent 
+                                    # variable xi.
+                 ('xisig', float), # The standard deviation of the distribution for the independent 
+                                   # latent variable xi.
+                 ('corr', float)] # The linear correlation coefficient between the latent dependent
+                                  # and independent variables xi.
     """
     def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3, nchains=4):
         self.nchains = nchains
@@ -385,14 +408,13 @@ class LinMix(object):
         Bayesian inference is employed, and a Markov chain containing random draws from the 
         posterior is developed.  Convergence of the MCMC to the posterior is monitored using the 
         potential scale reduction factor (RHAT, Gelman et al. 2004). In general, when RHAT < 1.1 
-        then approximate convergence is reached.
+        then approximate convergence is reached.  After convergence is reached, the second halves 
+        of all chains are concatenated and stored in the `.chain` attribute as a numpy recarray.
 
-        @param miniter   The minimum number of iterations to use. [Default: 5000].
-        @param maxiter   The maximum number of iterations to use. [Default: 100000].
-        @param silent    Suppress updates during sampling.  [Default: False].
-
-        The chain output is stored as a numpy recarray in the `.chain` attribute of the calling 
-        object.
+        Args:
+            miniter(int): The minimum number of iterations to use.
+            maxiter(int): The maximum number of iterations to use. 
+            silent(bool): If true, then suppress updates during sampling.
         """
         checkiter = 100
         for c in self.chains:
@@ -406,7 +428,8 @@ class LinMix(object):
             if not silent:
                 print
                 print "Iteration: ", i+checkiter
-                print "Rhat values for alpha, beta, log(sigma^2), mean(xi), log(var(xi)), atanh(corr(xi, eta)):"
+                print ("Rhat values for alpha, beta, log(sigma^2)"
+                       ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
                 print Rhat
 
         i += checkiter
@@ -418,7 +441,8 @@ class LinMix(object):
             if not silent:
                 print
                 print "Iteration: ", i+checkiter
-                print "Rhat values for alpha, beta, log(sigma^2), mean(xi), log(var(xi)), atanh(corr(xi, eta)):"
+                print ("Rhat values for alpha, beta, log(sigma^2)"
+                       ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
                 print Rhat
                 i += checkiter
 

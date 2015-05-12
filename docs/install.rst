@@ -42,4 +42,5 @@ You can use the normal setup.py routines to install the linmix package into your
   python setup.py install
 
 or if you want to install into your $HOME directory::
+
   python setup.py install --user

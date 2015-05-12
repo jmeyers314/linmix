@@ -1,6 +1,13 @@
 linmix package
 ==============
 
+Submodules
+----------
+
+.. toctree::
+
+   linmix.LinMix
+
 Module contents
 ---------------
 
