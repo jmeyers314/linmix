@@ -318,7 +318,7 @@ class LinMix(object):
 
     y = eta + yerr
 
-    Here, (`alpha`, `beta`) are the regression coefficients, `epsilon` is the intrinsic random 
+    Here, `alpha` and `beta` are the regression coefficients, `epsilon` is the intrinsic random 
     scatter about the regression, `xerr` is the measurement error in `x`, and `yerr` is the 
     measurement error in `y`.  `epsilon` is assumed to be normally-distributed with mean zero and 
     variance `sigsqr`.  `xerr` and `yerr` are assumed to be normally-distributed with means equal 
@@ -345,25 +345,25 @@ class LinMix(object):
         nchains(int): The number of instantiated MCMCs.
         chain(numpy recarray): The concatenated MCMCs themselves.  Actually, only the concatenation 
             of the last half of each chain is stored here after convergence is reached.  The 
-            recarray has the following dtype:
-                [('alpha', float), # The regression intercept.
-                 ('beta', float), # The regression slope.
-                 ('sigsqr', float), # The regression intrinsic scatter.
-                 ('pi', (float, K)), # The mixture model component fractions.
-                 ('mu', (float, K)), # The mixture model component means.
-                 ('tausqr', (float, K)), # The mixture model component variances.
-                 ('mu0', float), # The hyperparameter describing the prior mean of the distribution
-                                 # of mixture means.
-                 ('usqr', float), # The hyperparameter describing the prior variance of the 
-                                  # distribution of mixture means.
-                 ('wsqr', float), # The hyperparameter describing the `typical` scale for the prior
-                                  # on tausqr, usqr.
-                 ('ximean', float), # The mean of the distribution for the independent latent 
-                                    # variable xi.
-                 ('xisig', float), # The standard deviation of the distribution for the independent 
-                                   # latent variable xi.
-                 ('corr', float)] # The linear correlation coefficient between the latent dependent
-                                  # and independent variables xi.
+            recarray has the following columns:
+                - alpha(float): The regression intercept.
+                - beta(float): The regression slope.
+                - sigsqr(float): The regression intrinsic scatter.
+                - pi(array_like): The mixture model component fractions.
+                - mu(array_like): The mixture model component means.
+                - tausqr(array_like): The mixture model component variances.
+                - mu0(float): The hyperparameter describing the prior variance of the distribution 
+                    of mixture means.
+                - usqr(float): The hyperparameter describing the prior variance of the distribution 
+                    of mixture variances.
+                - wsqr(float): The hyperparameter describing the typical scale for the prior on 
+                    `usqr` and `tausqr`.
+                - ximean(float): The mean of the distribution for the independent latent variable 
+                    `xi`.
+                - xisig(float): The standard deviation of the distribution for the independent 
+                    latent variable `xi`.
+                - corr(float): The linear correlation coefficient between the latent dependent and
+                    independent variables `xi` and `eta`.
     """
     def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3, nchains=4):
         self.nchains = nchains

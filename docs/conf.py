@@ -18,7 +18,7 @@ import os
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('..'))
 
 # -- General configuration ------------------------------------------------
 
@@ -30,8 +30,9 @@ import os
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.mathjax',
-    'sphinx.ext.viewcode',
+#    'sphinx.ext.mathjax',
+#    'sphinx.ext.viewcode',
+    'sphinxcontrib.napoleon',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -55,7 +56,7 @@ copyright = u'2015, Joshua E. Meyers'
 # built documents.
 #
 # The short X.Y version.
-version = '0.1.0'
+version = '0.1'
 # The full version, including alpha/beta/rc tags.
 release = '0.1.0.dev1'
 
