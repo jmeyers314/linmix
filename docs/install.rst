@@ -33,3 +33,13 @@ You can check your numpy version using::
 
 	import numpy
 	print numpy.__version__
+
+Actually, you know, installing the package...
+---------------------------------------------
+
+You can use the normal setup.py routines to install the linmix package into your site-packages directory.::
+
+  python setup.py install
+
+or if you want to install into your $HOME directory::
+  python setup.py install --user
