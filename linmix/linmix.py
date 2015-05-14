@@ -118,7 +118,7 @@ class Chain(object):
         self.y_ul = y.copy()
         self.xi = x.copy()
 
-        self.cens = np.transpose(np.nonzero(np.logical_not(self.delta)))
+        self.cens = np.nonzero(np.logical_not(self.delta))[0]
 
         self.initialized = True
 
