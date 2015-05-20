@@ -11,13 +11,13 @@ random number generator for reproducibility::
     import linmix
     np.seed(2)
  
-The example uses a distribution for the latent independent variable :math:`\xi` as
+The example assumes the latent (unobserved) independent variable :math:`\xi` is distributed as
 
 .. math::
    \mathrm{Pr}(\xi) \propto e^\xi (1 + e^{2.75 \xi})^{-1}
 
-We can simulate draws from this distribution using rejection sampling.  First we plot the 
-unnormalized density to find out what the maximum is::
+We can simulate draws from this distribution using rejection sampling.  First we plot the
+unnormalized density to find out what the maximum unnormalized probability is::
 
     def pxi(xi):
         return np.exp(xi) * (1.0 + np.exp(2.75*xi))**(-1)
@@ -31,7 +31,12 @@ unnormalized density to find out what the maximum is::
 
 .. image:: /images/pxi.png
 
-We then rejection sample::
+The maximum density is a little below 0.55, so we can use that.  To draw samples from
+:math:`\mathrm{Pr}(\xi)`, we first propose a value :math:`\xi_i` uniformly between -10 and +10
+(it's okay if we clip the tails for this example), and then keep that proposal if
+:math:`\mathrm{Pr}(\xi_i) > u` where :math:`u` is drawn uniformly between 0 and 0.55.  If
+:math:`\mathrm{Pr}(\xi_i) < u`, then we propose a new value for :math:`\xi_i`.  Here's code to
+draw 100 samples from :math:`\mathrm{Pr}(\xi)`::
 
     def rejection_sample(p, pmax, prop, size):
         out=[]
@@ -49,9 +54,7 @@ We then rejection sample::
     prop = lambda : np.random.uniform(low=-10, high=10) # truncating range to (-10, 10)
     xi = rejection_sample(pxi, pmax, prop, size=100)
 
-Note that we propose samples only between -10 and +10, so we're only actually sampling the between 
-these two limits.  We can sanity check our samples by overplotting them with the probability density
-function::
+We can sanity check our samples by overplotting a histogram with the probability density function::
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -73,8 +76,9 @@ fit in a minute::
     epsilon = np.random.normal(loc=0, scale=np.sqrt(sigsqr), size=len(xi))
     eta = alpha + beta*xi + epsilon
 
-Similarly, we initialize the (uncorrelated) 1-sigma error estimates, and using these, the observed
-independent and dependent values::
+Similarly, we initialize the (uncorrelated) 1-sigma error estimates, and using these, initialize the
+observed independent (:math:`y`) and dependent (:math:`x`) values.  The observational errors are
+drawn from a scaled inverse :math:`\chi^2` distribution as in Kelly (2007). ::
 
     tau = np.std(xi)
     sigma = np.sqrt(sigsqr)
@@ -105,18 +109,27 @@ Let's plot these to see what we got::
     fig.tight_layout()
     plt.show()
 
+.. image:: /images/data.png
+
 The left panel shows the distribution of the latent (unobserved) independent and dependent variables.
-The right panel shows the distribution, together with the error bars, of the observed variables.  Looks reasonable.  The next step is to run the linmix algorithm on the simulated data::
+The right panel shows the distribution, together with the error bars, of the observed variables.
+The rectangle on the right matches the figure outline on the left.  The next step is to run the
+linmix algorithm on the simulated data ::
 
     lm = linmix.LinMix(x, y, xsig, ysig, K=2)
     lm.run_mcmc(silent=True)
 
-We set K=2 here to use two components in the mixture model.  If you want to see status updates as the 
-code runs, then set silent=False or just leave the silent keyword out completely (its default is 
-False).
+We set K=2 here to use two components in the mixture model, which is reasonable for our fairly
+simple (and nearly Gaussian) latent independent variable distribution.
 
-When run_mcmc() has finished, we can see the output in the lm.chain attribute.  Here we'll plot the 
-data and some samples from the Bayesian posterior on the same graph::
+The code will run somewhere between 5000 and 100000 steps of a MCMC to produce samples from the
+posterior distribution of the model parameters, given the data.  The code will automatically compare
+the variance of sample parameters between chains to the variance within single chains to determine
+if convergence has been reached and stop.  If you want to see status updates as the code runs, then
+set silent=False or just leave the silent keyword out completely (its default is False).
+
+When `run_mcmc()` has finished, we can see the output in the `lm.chain` attribute.  Here we'll plot
+the data and some samples from the Bayesian posterior on the same graph::
 
     fig = plt.figure(figsize=(10,4))
     ax = fig.add_subplot(121)
@@ -150,9 +163,10 @@ Missing data
 ------------
 
 One of the advanced features of linmix is its ability to handle non-detections or missing data.  For
-example, if we can look at the case where we only consider a source detected if y>1.5.  The delta 
-array is used to indicate if a source is detected or not.  We feed it into the LinMix constructor, 
-generate MCMC samples, and plot the results::
+example, we can look at the case where we only consider a source detected if `y>1.5`.  The `delta` 
+array is used to indicate if a source is detected or not.  In the code below, we feed the `delta`
+array into the LinMix constructor, generate MCMC samples the same way as before, and plot the
+results::
 
     delta = y > 1.5
     notdelta = np.logical_not(delta)
