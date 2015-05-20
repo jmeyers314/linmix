@@ -149,7 +149,7 @@ The black line shows the input regression line and the red lines show some sampl
 posterior distribution.
 
 Missing data
-============
+------------
 
 One of the advanced features of linmix is its ability to handle non-detections or missing data.  For
 example, if we can look at the case where we only consider a source detected if y>1.5.  The delta 
