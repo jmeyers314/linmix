@@ -1,4 +1,5 @@
-# linmix -- A Bayesian approach to linear regression with errors in both X and Y.
+# linmix
+## A Bayesian approach to linear regression with errors in both X and Y.
 
 Python port of B. Kelly's LINMIX_ERR IDL package (Kelly2007, arXiv:0705.2774).  Paraphrasing from
 the LINMIX_ERR.pro IDL routine:
