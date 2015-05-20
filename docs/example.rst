@@ -29,8 +29,6 @@ unnormalized density to find out what the maximum is::
     ax.set_ylabel(r"$P(\xi)$")
     plt.show()
 
-text
-
 .. image:: /images/pxi.png
 
 We then rejection sample::
