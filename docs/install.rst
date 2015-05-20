@@ -1,16 +1,20 @@
 Installation
 ============
 
-Install with GIT
-----------------
+Obtain through GIT
+------------------
 
-The code is hosted on `github <https://github.com/jmeyers314/linmix>`_ so the easiest method to perform an initial installation is with `git <http://git-scm.com>`_::
+The code is hosted on `github <https://github.com/jmeyers314/linmix>`_ so the easiest method to
+get a copy of the code is with `git <http://git-scm.com>`_::
 
 	git clone https://github.com/jmeyers314/linmix.git
 
-This will create a new subdirectory `linmix` containing the latest stable version of the complete package.
+This will create a new subdirectory `linmix` containing the latest stable version of the complete
+package.
 
-Experts who already have a `correctly configured github account <https://help.github.com/articles/which-remote-url-should-i-use/#cloning-with-ssh>`_ might prefer this alternative::
+Experts who already have a `correctly configured github account
+<https://help.github.com/articles/which-remote-url-should-i-use/#cloning-with-ssh>`_ might prefer
+this alternative::
 
 	git clone git@github.com:jmeyers314/linmix.git
 
@@ -29,15 +33,11 @@ The following python package is required by this package:
 
 * numpy
 
-You can check your numpy version using::
+Installing
+----------
 
-	import numpy
-	print numpy.__version__
-
-Actually, you know, installing the package...
----------------------------------------------
-
-You can use the normal setup.py routines to install the linmix package into your site-packages directory.::
+You can use the normal setup.py routines to install the linmix package into your python site-packages
+directory.::
 
   python setup.py install
 
