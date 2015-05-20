@@ -20,7 +20,7 @@ _xsig_^2 and _ysig_^2, respectively, and covariance _xycov_.  The distribution o
 a mixture of normals, with group proportions _pi_, means _mu_, and variances _tausqr_.  The following
 graphical model illustrates, well..., the model...
 
-[linmix PGM](docs/pgm/pgm.png)
+![linmix PGM](docs/pgm/pgm.png)
 
 Bayesian
 inference is employed, and a Markov chain containing random draws from the posterior is developed.
