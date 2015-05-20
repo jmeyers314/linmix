@@ -27,7 +27,7 @@ Required Packages
 
 The following python package is required by this package:
 
-* numpy (version >= 1.9)
+* numpy
 
 You can check your numpy version using::
 

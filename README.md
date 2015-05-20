@@ -22,15 +22,17 @@ graphical model illustrates, well..., the model...
 
 ![linmix PGM](docs/pgm/pgm.png)
 
-Bayesian
-inference is employed, and a Markov chain containing random draws from the posterior is developed.
-Convergence of the MCMC to the posterior is monitored using the potential scale reduction factor
-(RHAT, Gelman et al. 2004). In general, when RHAT < 1.1 then approximate convergence is reached.
+Bayesian inference is employed, and a Markov chain containing random draws from the posterior is
+developed. Convergence of the MCMC to the posterior is monitored using the potential scale reduction
+factor (RHAT, Gelman et al. 2004). In general, when RHAT < 1.1 then approximate convergence is
+reached.
 
 Documentation
 -------------
 
-More detailed documentation can be found at http://linmix.readthedocs.org/en/latest/
+More detailed documentation can be found at http://linmix.readthedocs.org/en/latest/.  In particular,
+the API is listed at http://linmix.readthedocs.org/en/latest/src/linmix.html, and a worked example
+(the same as in Kelly (2007) (arXiv:0705.2774)), is at http://linmix.readthedocs.org/en/latest/example.html.
 
 Usage
 -----
@@ -45,5 +47,6 @@ print lm.chains['sigsqr'].mean(), lm.chains['sigsqr'].std()
 
 Installation
 ------------
-Currently, the best way to get linmix for python is to clone from github and build using normal setup.py facilities.
-In the future, I hope to add linmix to PyPI.
+Currently, the best way to get linmix for python is to clone from github and build using normal
+setup.py facilities.  (see http://linmix.readthedocs.org/en/latest/install.html)  In the future, I
+hope to add linmix to PyPI.
