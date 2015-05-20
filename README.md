@@ -1,9 +1,5 @@
 # linmix_py
-A Bayesian approach to linear regression with errors in both X and Y.
-
-Python port of B. Kelly's LINMIX_ERR IDL package (Kelly2007, arXiv:0705.2774).
-
-Quoting directly from the LINMIX_ERR.pro IDL routine:
+A Bayesian approach to linear regression with errors in both X and Y.  Python port of B. Kelly's LINMIX_ERR IDL package (Kelly2007, arXiv:0705.2774).  Quoting directly from the LINMIX_ERR.pro IDL routine:
 
 Perform linear regression of y on x when there are measurement errors in both variables.  The regression assumes:
 
