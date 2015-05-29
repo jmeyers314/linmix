@@ -123,10 +123,12 @@ class Chain(object):
         self.initialized = True
 
     def update_cens_y(self): # Step 2
-        for i in self.cens:
-            self.y[i] = np.random.normal(loc=self.eta[i], scale=np.sqrt(self.yvar[i]))
-            while self.y[i] > self.y_ul[i]:
-                self.y[i] = np.random.normal(loc=self.eta[i], scale=np.sqrt(self.yvar[i]))
+        todo = self.cens[:]
+        while len(todo) > 0:
+            self.y[todo] = np.random.normal(loc=self.eta[todo],
+                                            scale=np.sqrt(self.yvar[todo]),
+                                            size=len(todo))
+            todo = np.nonzero(np.logical_not(self.delta) & (self.y > self.y_ul))[0]
 
     def update_xi(self): # Step 3
         wxerr = self.wxerr
