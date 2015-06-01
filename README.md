@@ -51,3 +51,7 @@ Installation
 Currently, the best way to get linmix for python is to clone from github and build using normal
 setup.py facilities.  (see http://linmix.readthedocs.org/en/latest/install.html)  In the future, I
 hope to add linmix to PyPI.
+
+License
+-------
+This repo is licensed under the 2-line BSD license.  See the LICENSE doc for more details.
