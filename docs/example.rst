@@ -9,7 +9,7 @@ random number generator for reproducibility::
     import matplotlib.pyplot as plt
     import numpy as np
     import linmix
-    np.seed(2)
+    np.random.seed(2)
  
 The example assumes the latent (unobserved) independent variable :math:`\xi` is distributed as
 
@@ -87,7 +87,7 @@ drawn from a scaled inverse :math:`\chi^2` distribution as in Kelly (2007). ::
     xsig = 5*t**2 / np.random.chisquare(5, size=len(xi))
     ysig = 5*s**2 / np.random.chisquare(5, size=len(eta))
     x = np.random.normal(loc=xi, scale=xsig)
-    y = np.random.normal(loc=xi, scale=ysig)
+    y = np.random.normal(loc=eta, scale=ysig)
 
 Let's plot these to see what we got::
 
@@ -173,7 +173,7 @@ results::
     ycens = y.copy()
     ycens[notdelta] = 1.5
     lmcens  = linmix.LinMix(x, ycens, xsig, ysig, delta=delta, K=2)
-    lncens.run_mcmc(silent=True)
+    lmcens.run_mcmc(silent=True)
     fig = plt.figure(figsize=(10,4))
     ax = fig.add_subplot(121)
     ax.scatter(xi, eta)
