@@ -2,6 +2,7 @@ import numpy as np
 import linmix
 from astropy.table import Table
 
+
 def generate_test_data():
     alpha = 4.0
     beta = 3.0
@@ -28,12 +29,13 @@ def generate_test_data():
     # And censor all the ydata less than 10, unless the yerr is 0
     w10 = (y < 10) & (ysig != 0)
     y[w10] = 10
-    delta = np.ones((len(x),), dtype=int) # should really be bool, but ints are easier
+    delta = np.ones((len(x),), dtype=int)  # should really be bool, but ints are easier
     delta[w10] = 0
 
     out = Table([x, y, xsig, ysig, delta], names=['x', 'y', 'xsig', 'ysig', 'delta'])
     import astropy.io.ascii as ascii
     ascii.write(out, 'test.dat')
+
 
 def run():
     import astropy.io.ascii as ascii
@@ -45,7 +47,7 @@ def run():
 
     lm = linmix.LinMix(a['x'], a['y'], a['xsig'], a['ysig'], delta=a['delta'])
     lm.run_mcmc()
-    ascii.write(lm.chain, 'test.pyout')
+    # ascii.write(lm.chain, 'test.pyout')
 
 if __name__ == '__main__':
     run()

@@ -30,6 +30,7 @@ pgm.add_node(daft.Node("prior_wsqr", r"U(0, $\infty$)", 4, 3, fixed=True))
 pgm.add_node(daft.Node("prior_pi", r"Dirichlet(1, ..., 1)", 2, 3, fixed=True))
 
 pgm.add_edge("xi", "x")
+pgm.add_edge("eta", "x")
 pgm.add_edge("xi", "eta")
 pgm.add_edge("eta", "y")
 pgm.add_edge("xi", "y")
