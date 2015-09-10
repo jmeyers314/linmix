@@ -4,6 +4,12 @@
 import numpy as np
 
 
+def randomwish(dof, S):
+    dim = S.shape[0]
+    x = np.random.multivariate_normal(np.zeros(dim), S, dof)
+    return np.dot(x.T, x)
+
+
 class Chain(object):
     def __init__(self, x, y, xsig, ysig, xycov, delta, K, nchains):
         self.x = np.array(x, dtype=float)
@@ -398,6 +404,54 @@ class MultiChain(object):
 
         # Draw sigsqr from an Inverse scaled chi-square density
         self.sigsqr = sigsqr * self.N/2.0 / np.random.chisquare(self.N/2.0)
+
+        # Randomly choose K data pints, set these to the group means
+
+        self.mu = self.x[np.random.permutation(self.N)[0:self.K]]
+
+        if self.K > 1:
+            # get distance of data points to each centroid; classify to closest centroid
+            dist = np.zeros((self.N, self.K), dtype=float)
+            for k in range(self.K):
+                dist[:, k] = np.sum((self.x - self.mu[k])**2, axis=1)
+            self.G = np.argmin(dist, axis=1)
+        else:
+            self.G = np.ones((self.N,), dtype=int)
+
+        # Next get initial guesses for Pi and T
+        self.pi = np.empty(self.K, dtype=float)
+        self.T = np.empty((self.Np, self.Np, self.K), dtype=float)
+        for k in range(self.K):
+            gk = self.G == k
+            nk = np.sum(gk)
+            if nk > self.Np:
+                self.pi[k] = float(nk) / self.N
+                self.T[:, :, k] = np.cov(self.x[gk, :].T)
+            else:
+                self.pi[k] = float(max(1, nk)) / self.N
+                self.T[:, :, k] = np.cov(self.x.T)
+        # Make sure Pi sums to unity
+        self.pi /= np.sum(self.pi)
+
+        # Now get initial guesses for prior parameters
+        self.mu0 = self.mu[0, :] if self.K == 1 else np.mean(self.mu, axis=0)
+        Smat = np.cov(self.x.T)
+        self.U = randomwish(self.N, Smat / self.N)
+        self.W = randomwish(self.N, Smat / self.N)
+
+        xyvar_inv = np.empty_like(self.xyvar)
+        for i in range(self.N):
+            xyvar_inv[i, :, :] = np.linalg.inv(self.xyvar[i, :, :])
+
+        # Get starting values for eta
+        self.eta = self.y
+        self.xi = self.x
+
+        # Initialize some matrix inverses
+        self.Tk_inv = np.empty((self.Np, self.Np, self.K), dtype=float)
+        for k in range(self.K):
+            self.Tk_inv[:, :, k] = np.linalg.inv(self.T[:, :, k])
+        self.U_inv = np.linalg.inv(self.U)
 
 
     # def update_cens_y(self):  # Step 2

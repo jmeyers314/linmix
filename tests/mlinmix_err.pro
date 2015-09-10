@@ -383,7 +383,7 @@ for i = 0, nchains - 1 do begin
     Ug[*,*,i] = randomwish(seed, nx, Smat / nx)
 
     Wg[*,*,i] = randomwish(seed, nx, Smat / nx)
-
+stop
 endfor
 
 alpha = alphag

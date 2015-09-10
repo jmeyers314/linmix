@@ -1,4 +1,4 @@
-Pro test_mlinmix_err
+Pro testidl_mlinmix
   readcol, 'test_mlinmix.dat', x1, x2, y, x1var, x2var, yvar
   x = [[x1], [x2]]
   nx = n_elements(x1)

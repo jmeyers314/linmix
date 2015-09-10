@@ -45,7 +45,7 @@ def run():
     try:
         a = ascii.read('test_mlinmix.dat')
     except:
-        #generate_test_data()
+        generate_test_data()
         a = ascii.read('test_mlinmix.dat')
 
     x = np.transpose(np.vstack([a['x1'], a['x2']]))
@@ -53,12 +53,6 @@ def run():
 
     lm = linmix.MLinMix(x, a['y'], xvar, a['yvar'])
     lm.run_mcmc()
-    import ipdb; ipdb.set_trace()
-
-    x, y, xvar, yvar = generate_test_data()
-    lm = linmix.MLinMix(x, y, xvar, yvar)
-    result = lm.run_mcmc()
-    print result
 
 
 if __name__ == '__main__':
