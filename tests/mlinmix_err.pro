@@ -292,10 +292,8 @@ denom_diag = (denom[1:*,1:*])[diag]
 denom_diag = denom_diag > 0.025 * (Vcoef[1:*,1:*])[diag]
 denom[diag2[1:*]] = denom_diag
 numer = y ## transpose(Xmat) - [0d, median(xycov, dim=1)]
-
 choldc, denom, P, /double ;solve by cholesky decomposition
 coef = cholsol( denom, P, numer, /double )
-
 alpha = coef[0]
 beta = coef[1:*]
 

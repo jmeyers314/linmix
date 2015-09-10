@@ -2,6 +2,7 @@ import numpy as np
 import linmix
 from astropy.table import Table
 
+
 def generate_test_data():
     alpha = 1.0
     beta = np.array([2.0, 3.0])
@@ -40,6 +41,20 @@ def generate_test_data():
 
 
 def run():
+    import astropy.io.ascii as ascii
+    try:
+        a = ascii.read('test_mlinmix.dat')
+    except:
+        #generate_test_data()
+        a = ascii.read('test_mlinmix.dat')
+
+    x = np.transpose(np.vstack([a['x1'], a['x2']]))
+    xvar = np.array([np.diag([x1v, x2v]) for x1v, x2v in zip(a['x1var'], a['x2var'])])
+
+    lm = linmix.MLinMix(x, a['y'], xvar, a['yvar'])
+    lm.run_mcmc()
+    import ipdb; ipdb.set_trace()
+
     x, y, xvar, yvar = generate_test_data()
     lm = linmix.MLinMix(x, y, xvar, yvar)
     result = lm.run_mcmc()

@@ -360,17 +360,46 @@ class MultiChain(object):
         self.initialized = False
 
     def initial_guess(self):  # Step 1
-        # Moment correction method
+        diag = np.arange(self.Np) * (self.Np + 1)
+        diag2 = np.arange(self.Np + 1) * (self.Np + 2)
+
+        # Moment correction method to estimate regression coefficients and intrinsic dispersion
         Xmat = np.ones((self.N), dtype=float)
         Xmat = np.hstack([Xmat[:, np.newaxis], self.x])
         denom = np.dot(Xmat.T, Xmat)
         Vcoef = denom
         denom[1:, 1:] -= np.median(self.xvar, axis=0)
 
-        self.cens = np.nonzero(np.logical_not(self.delta))[0]
+        denom_diag = np.diag(denom[1:, 1:])
+        denom_diag = np.maximum(denom_diag, 0.025 * np.diag(Vcoef[1:, 1:]))
+        denom.flat[diag2[1:]] = denom_diag
 
-        self.initialized = True
-    #
+        numer = np.dot(self.y, Xmat) - np.concatenate([[0.0], np.median(self.xycov, axis=0)])
+        coef = np.linalg.solve(denom, numer)
+
+        alpha = coef[0]
+        beta = coef[1:]
+
+        sigsqr = np.var(self.y, ddof=1) - np.mean(self.yvar)
+
+        sigsqr -= np.dot(beta, np.dot(np.cov(self.x.T) - np.median(self.xvar, axis=0), beta.T))
+
+        sigsqr = np.max(sigsqr, 0.05 * np.var(self.y - alpha - np.dot(self.x, beta)))
+
+        # Randomly disperse starting values for (alpha, beta) from a
+        # multivariate Students-t distribution with 4 degrees of freedom
+
+        Vcoef = np.linalg.inv(Vcoef) * sigsqr * 4
+        coef = np.random.multivariate_normal(mean=np.zeros((self.Np+1,), dtype=float), cov=Vcoef)
+        chisqr = np.random.chisquare(4)
+
+        self.alpha = alpha + coef[0] * np.sqrt(4.0 / chisqr)
+        self.beta = beta + coef[1:] * np.sqrt(4.0 / chisqr)
+
+        # Draw sigsqr from an Inverse scaled chi-square density
+        self.sigsqr = sigsqr * self.N/2.0 / np.random.chisquare(self.N/2.0)
+
+
     # def update_cens_y(self):  # Step 2
     #     todo = self.cens[:]
     #     while len(todo) > 0:
