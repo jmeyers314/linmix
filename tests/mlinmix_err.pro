@@ -344,7 +344,7 @@ for i = 0, nchains - 1 do begin
                                 ;get distance of data points to each
                                 ;centroid
         for k = 0, ngauss - 1 do $
-          dist[0,k] = total((x - mug[*,k,i] ## replicate(1d, nx))^2, 2)
+          dist[*,k] = total((x - mug[*,k,i] ## replicate(1d, nx))^2, 2)
 
         mindist = min(dist, Glabel0, dim=2) ;classify to closest centroid
 
@@ -352,7 +352,7 @@ for i = 0, nchains - 1 do begin
 
     endif else Glabel0 = intarr(nx)
 
-    Glabel[0,i] = Glabel0
+    Glabel[*,i] = Glabel0
 
 ;now get initial guesses for PI and T
 
@@ -383,7 +383,6 @@ for i = 0, nchains - 1 do begin
     Ug[*,*,i] = randomwish(seed, nx, Smat / nx)
 
     Wg[*,*,i] = randomwish(seed, nx, Smat / nx)
-stop
 endfor
 
 alpha = alphag
@@ -476,6 +475,7 @@ repeat begin
 
         for j = 0, np - 1 do begin
 
+            ; The "leave-one-out" subscripts
             case j of
 
                 0 : inactive = indgen(np - 1) + 1L
@@ -484,11 +484,14 @@ repeat begin
 
             endcase
 
+            ; Part of Eqn 62
             xstar[*,j] = x[*,j]
             xstar[*,inactive] = x[*,inactive] - xi[*,inactive,i]
 
+            ; Part of Eqn 62
             zstar = [[ygibbs - eta[*,i]], [xstar]]
 
+            ; Eqn 61 numerator term
             zmu = total(xyvar_inv[*,*,j+1] * zstar, 2)
 
             for k = 0, ngauss - 1 do begin ;do one gaussian at-a-time
@@ -497,19 +500,25 @@ repeat begin
 
                 if ngk gt 0 then begin
 
+                    ; Eqn 63
                     mustar[gk,j] = mu[j,k,i]
                     for l = 0, np - 2 do mustar[gk,inactive[l]] = $
                       mu[inactive[l],k,i] - xi[gk,inactive[l],i]
 
+                    ; Eqn 61 numerator term
                     mmu = Tk_inv[*,j,k,i] ## mustar[gk,*]
 
+                    ; Eqn 61 numerater term
                     etamu = eta[gk,i] - alpha[i] - beta[inactive,i] ## xi[gk,inactive,i]
 
+                    ; Eqn 65
                     xihvar = 1d / (xyvar_inv[gk,j+1,j+1] + Tk_inv[j,j,k,i] + $
                                    beta[j,i]^2 / sigsqr[i])
 
+                    ; Eqn 61
                     xihat = xihvar * (zmu[gk] + mmu + beta[j,i] * etamu / (sigsqr[i]))
 
+                    ; Eqn 59
                     xi[gk,j,i] = xihat + sqrt(xihvar) * randomn(seed, nx)
 
                 endif
@@ -518,6 +527,7 @@ repeat begin
 
         endfor
                                 ;now draw Eta|Xi,alpha,beta,sigsqr,y
+
         zstar = [[ygibbs], [x - xi[*,*,i]]]
 
         zmu = total(xyvar_inv[*,*,0] * zstar, 2)
@@ -534,10 +544,9 @@ repeat begin
                                 ;get unnormalized probability that
                                 ;source i came from Gaussian k, given
                                 ;xi[i]
-            for k = 0, ngauss - 1 do begin
-
+            for k = 0, ngauss - 1 do begin                
                 xicent = xi[*,*,i] - mu[*,k,i] ## replicate(1, nx)
-                gamma[0,k] = $
+                gamma[*,k] = $
                   pi[k,i] / ((2d*!pi)^(np/2d) * determ(T[*,*,k,i], /double)) * $
                   exp(-0.5 * total(xicent * (Tk_inv[*,*,k,i] ## xicent), 2))
 

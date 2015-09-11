@@ -366,8 +366,7 @@ class MultiChain(object):
         self.initialized = False
 
     def initial_guess(self):  # Step 1
-        diag = np.arange(self.Np) * (self.Np + 1)
-        diag2 = np.arange(self.Np + 1) * (self.Np + 2)
+        diag = np.arange(self.Np + 1) * (self.Np + 2)
 
         # Moment correction method to estimate regression coefficients and intrinsic dispersion
         Xmat = np.ones((self.N), dtype=float)
@@ -378,7 +377,7 @@ class MultiChain(object):
 
         denom_diag = np.diag(denom[1:, 1:])
         denom_diag = np.maximum(denom_diag, 0.025 * np.diag(Vcoef[1:, 1:]))
-        denom.flat[diag2[1:]] = denom_diag
+        denom.flat[diag[1:]] = denom_diag
 
         numer = np.dot(self.y, Xmat) - np.concatenate([[0.0], np.median(self.xycov, axis=0)])
         coef = np.linalg.solve(denom, numer)
@@ -406,14 +405,13 @@ class MultiChain(object):
         self.sigsqr = sigsqr * self.N/2.0 / np.random.chisquare(self.N/2.0)
 
         # Randomly choose K data pints, set these to the group means
-
-        self.mu = self.x[np.random.permutation(self.N)[0:self.K]]
+        self.mu = self.x[np.random.permutation(self.N)[0:self.K]].T
 
         if self.K > 1:
             # get distance of data points to each centroid; classify to closest centroid
             dist = np.zeros((self.N, self.K), dtype=float)
             for k in range(self.K):
-                dist[:, k] = np.sum((self.x - self.mu[k])**2, axis=1)
+                dist[:, k] = np.sum((self.x - self.mu[:,k])**2, axis=1)
             self.G = np.argmin(dist, axis=1)
         else:
             self.G = np.ones((self.N,), dtype=int)
@@ -434,18 +432,19 @@ class MultiChain(object):
         self.pi /= np.sum(self.pi)
 
         # Now get initial guesses for prior parameters
-        self.mu0 = self.mu[0, :] if self.K == 1 else np.mean(self.mu, axis=0)
+        self.mu0 = self.mu[:, 0] if self.K == 1 else np.mean(self.mu, axis=1)
         Smat = np.cov(self.x.T)
         self.U = randomwish(self.N, Smat / self.N)
         self.W = randomwish(self.N, Smat / self.N)
 
-        xyvar_inv = np.empty_like(self.xyvar)
+        self.xyvar_inv = np.empty_like(self.xyvar)
         for i in range(self.N):
-            xyvar_inv[i, :, :] = np.linalg.inv(self.xyvar[i, :, :])
+            self.xyvar_inv[i, :, :] = np.linalg.inv(self.xyvar[i, :, :])
 
         # Get starting values for eta
-        self.eta = self.y
-        self.xi = self.x
+        self.eta = self.y.copy()
+        self.xi = self.x.copy()
+        self.y_ul = self.y.copy()
 
         # Initialize some matrix inverses
         self.Tk_inv = np.empty((self.Np, self.Np, self.K), dtype=float)
@@ -453,66 +452,97 @@ class MultiChain(object):
             self.Tk_inv[:, :, k] = np.linalg.inv(self.T[:, :, k])
         self.U_inv = np.linalg.inv(self.U)
 
+        self.cens = np.nonzero(np.logical_not(self.delta))[0]
 
-    # def update_cens_y(self):  # Step 2
-    #     todo = self.cens[:]
-    #     while len(todo) > 0:
-    #         self.y[todo] = np.random.normal(loc=self.eta[todo],
-    #                                         scale=np.sqrt(self.yvar[todo]),
-    #                                         size=len(todo))
-    #         todo = np.nonzero(np.logical_not(self.delta) & (self.y > self.y_ul))[0]
-    #
-    # def update_xi(self):  # Step 3
-    #     wxerr = self.wxerr
-    #     wyerr = self.wyerr
-    #
-    #     # Eqn (58)
-    #     sigma_xihat_ik_sqr = 1.0/(1.0/(self.xvar * (1.0 - self.xycorr**2))[:, np.newaxis]
-    #                               + self.beta**2 / self.sigsqr
-    #                               + 1.0/self.tausqr)
-    #     # Eqn (57)
-    #     sigma_xihat_i_sqr = np.sum(self.G * sigma_xihat_ik_sqr, axis=1)
-    #     # Eqn (56)
-    #     xihat_xy_i = self.x.copy()
-    #     xihat_xy_i[wyerr] += (self.xycov / self.yvar * (self.eta - self.y))[wyerr]
-    #     # Eqn (55)
-    #     xihat_ik = (sigma_xihat_i_sqr[:, np.newaxis]
-    #                 * ((xihat_xy_i/self.xvar
-    #                     * (1.0 - self.xycorr**2))[:, np.newaxis]
-    #                    + self.beta*(self.eta[:, np.newaxis] - self.alpha)/self.sigsqr
-    #                    + self.mu/self.tausqr))
-    #     # Eqn (54)
-    #     xihat_i = np.sum(self.G * xihat_ik, axis=1)
-    #     # Eqn (53)
-    #     self.xi[wxerr] = np.random.normal(loc=xihat_i[wxerr],
-    #                                       scale=np.sqrt(sigma_xihat_i_sqr[wxerr]))
-    #
-    # def update_eta(self):  # Step 4
-    #     wxerr = self.wxerr
-    #     wyerr = self.wyerr
-    #
-    #     etaxyvar = self.yvar * (1.0 - self.xycorr**2)
-    #     etaxy = self.y.copy()
-    #     etaxy[wxerr] += (self.xycov / self.xvar * (self.xi - self.x))[wxerr]
-    #
-    #     # Eqn (68)
-    #     sigma_etahat_i_sqr = 1.0/(1.0/etaxyvar + 1.0/self.sigsqr)
-    #     # Eqn (67)
-    #     etahat_i = (sigma_etahat_i_sqr * (etaxy / etaxyvar
-    #                 + (self.alpha + self.beta * self.xi) / self.sigsqr))
-    #     # Eqn (66)
-    #     self.eta[wyerr] = np.random.normal(loc=etahat_i[wyerr],
-    #                                        scale=np.sqrt(sigma_etahat_i_sqr[wyerr]))
-    #
-    # def update_G(self):  # Step 5
-    #     # Eqn (74)
-    #     piNp = self.pi * (1.0/np.sqrt(2.0*np.pi*self.tausqr)
-    #                       * np.exp(-0.5 * (self.xi[:, np.newaxis] - self.mu)**2 / self.tausqr))
-    #     q_ki = piNp / np.sum(piNp, axis=1)[:, np.newaxis]
-    #     # Eqn (73)
-    #     for i in xrange(self.N):
-    #         self.G[i] = np.random.multinomial(1, q_ki[i])
-    #
+    def update_cens_y(self):  # Step 2
+        todo = self.cens[:]
+        while len(todo) > 0:
+            self.y[todo] = np.random.normal(loc=self.eta[todo],
+                                            scale=np.sqrt(self.yvar[todo]),
+                                            size=len(todo))
+            todo = np.nonzero(np.logical_not(self.delta) & (self.y > self.y_ul))[0]
+
+    def update_xi(self):  # Step 3
+        xstar = np.empty((self.N, self.Np), dtype=float)
+        for j in range(self.Np):
+            # The "leave-one-out" subscripts
+            if j == 0:
+                inactive = np.arange(self.Np-1)+1
+            elif j == self.Np - 1:
+                inactive = np.arange(self.Np-1)
+            else:
+                inactive = np.hstack([np.arange(j), np.arange(self.Np-j-1)+j+1])
+
+            # Part of Eqn (62)
+            xstar[:, j] = self.x[:, j]
+            xstar[:, inactive] = self.x[:, inactive] - self.xi[:, inactive]
+
+            # Part of Eqn (62)
+            zstar = np.hstack([(self.y - self.eta)[:, np.newaxis], xstar])
+
+            # Term in Eqn (61) numerator
+            zmu = np.sum(self.xyvar_inv[:, :, j+1] * zstar, axis=1)
+
+            # For Eqn (63)
+            mustar = np.empty((self.N, self.Np), dtype=float)
+
+            # Do one Gaussian at a time
+            for k in range(self.K):
+                gk = np.nonzero(self.G == k)[0]
+                if len(gk) > 0:
+                    # Eqn (63)
+                    mustar[gk, j] = self.mu[j, k]
+                    for l in range(self.Np-2):
+                        mustar[gk, inactive[l]] = (self.mu[inactive[l], k]
+                                                   - self.xi[gk, inactive[l]])
+                    # Term in Eqn (61) numerator
+                    mmu = np.dot(self.Tk_inv[:, j, k], mustar[gk, :].T)
+
+                    # Term in Eqn (61) numerator
+                    etamu = (self.eta[gk] - self.alpha
+                             - np.dot(self.beta[inactive], self.xi[np.ix_(gk, inactive)].T))
+
+                    # Eqn (65)
+                    xihvar = 1. / (self.xyvar_inv[gk, j+1, j+1] + self.Tk_inv[j, j, k]
+                                   + self.beta[j]**2 / self.sigsqr)
+                    # Eqn (61)
+                    xihat = xihvar * (zmu[gk] + mmu + self.beta[j] * etamu / self.sigsqr)
+
+                    # Eqn (59)
+                    self.xi[gk, j] = xihat + np.sqrt(xihvar) * np.random.normal(size=len(gk))
+
+    def update_eta(self):  # Step 4
+        # Eqn (72)
+        zstar = np.hstack([self.y[:, np.newaxis], self.x-self.xi])
+
+        # Term in Eqn (70) numerator
+        zmu = np.sum(self.xyvar_inv[:, :, 0] * zstar, axis=1)
+
+        # Term in Eqn (70) numerator
+        ximu = self.alpha + np.dot(self.beta, self.xi.T) / self.sigsqr
+
+        # Denominator in Eqn (70)
+        etahvar = 1. / (self.xyvar_inv[:, 0, 0] + 1./self.sigsqr)
+
+        # Eqn (70)
+        etahat = etahvar * (zmu + ximu)
+
+        # Eqn (69)
+        self.eta = etahat + np.sqrt(etahvar) * np.random.normal(size=self.N)
+
+    def update_G(self):  # Step 5
+        gamma = np.empty((self.N, self.K), dtype=float)
+        for k in range(self.K):
+            xicent = self.xi - np.outer(np.ones(self.N), self.mu[:, k])
+            gamma[:, k] = (
+                self.pi[k] / ((2.0 * np.pi)**(self.Np/2.0) * np.linalg.det(self.T[:, :, k]))
+                * np.exp(-0.5 * np.sum(xicent * np.dot(xicent, self.Tk_inv[:, :, k]), axis=1)))
+        norm = np.sum(gamma, axis=1)
+        for j in range(self.N):
+            gamma0 = gamma[j, :]/norm[j]
+            Gjk = np.random.multinomial(1, gamma0)
+            self.G[j] = np.nonzero(Gjk)[0]
+
     # def update_alpha_beta(self):  # Step 6
     #     X = np.ones((self.N, 2), dtype=float)
     #     X[:, 1] = self.xi
@@ -585,61 +615,53 @@ class MultiChain(object):
     #     # Eqn (101)
     #     self.wsqr = np.random.gamma(a, 1.0/b)
     #
-    # def initialize_chain(self, chain_length):
-    #     self.chain_dtype = [('alpha', float),
-    #                         ('beta', float),
-    #                         ('sigsqr', float),
-    #                         ('pi', (float, self.K)),
-    #                         ('mu', (float, self.K)),
-    #                         ('tausqr', (float, self.K)),
-    #                         ('mu0', float),
-    #                         ('usqr', float),
-    #                         ('wsqr', float),
-    #                         ('ximean', float),
-    #                         ('xisig', float),
-    #                         ('corr', float)]
-    #     self.chain = np.empty((chain_length,), dtype=self.chain_dtype)
-    #     self.ichain = 0
-    #
-    # def extend_chain(self, length):
-    #     extension = np.empty((length), dtype=self.chain_dtype)
-    #     self.chain = np.hstack((self.chain, extension))
-    #
-    # def update_chain(self):
-    #     self.chain['alpha'][self.ichain] = self.alpha
-    #     self.chain['beta'][self.ichain] = self.beta
-    #     self.chain['sigsqr'][self.ichain] = self.sigsqr
-    #     self.chain['pi'][self.ichain] = self.pi
-    #     self.chain['mu'][self.ichain] = self.mu
-    #     self.chain['tausqr'][self.ichain] = self.tausqr
-    #     self.chain['mu0'][self.ichain] = self.mu0
-    #     self.chain['usqr'][self.ichain] = self.usqr
-    #     self.chain['wsqr'][self.ichain] = self.wsqr
-    #     ximean = np.sum(self.pi * self.mu)
-    #     self.chain['ximean'][self.ichain] = ximean
-    #     xisig = np.sqrt(np.sum(self.pi * (self.tausqr + self.mu**2)) - ximean**2)
-    #     self.chain['xisig'][self.ichain] = xisig
-    #     self.chain['corr'][self.ichain] = self.beta * xisig / np.sqrt(self.beta**2 * xisig**2
-    #                                                                   + self.sigsqr)
-    #     self.ichain += 1
-    #
-    # def step(self, niter):
-    #     for i in xrange(niter):
-    #         self.update_cens_y()
-    #         old_settings = np.seterr(divide='ignore', invalid='ignore')
-    #         self.update_xi()
-    #         self.update_eta()
-    #         np.seterr(**old_settings)
-    #         self.update_G()
-    #         self.update_alpha_beta()
-    #         self.update_sigsqr()
-    #         self.update_pi()
-    #         self.update_mu()
-    #         self.update_tausqr()
-    #         self.update_mu0()
-    #         self.update_usqr()
-    #         self.update_wsqr()
-    #         self.update_chain()
+
+    def initialize_chain(self, chain_length):
+        self.chain_dtype = [('alpha', float),
+                            ('beta', (float, self.Np)),
+                            ('sigsqr', float),
+                            ('pi', (float, self.K)),
+                            ('mu', (float, (self.Np, self.K))),
+                            ('T', (float, (self.Np, self.Np, self.K))),
+                            ('mu0', (float, self.Np)),
+                            ('U', (float, (self.Np, self.Np))),
+                            ('W', (float, (self.Np, self.Np)))]
+        self.chain = np.empty((chain_length,), dtype=self.chain_dtype)
+        self.ichain = 0
+
+    def extend_chain(self, length):
+        extension = np.empty((length), dtype=self.chain_dtype)
+        self.chain = np.hstack((self.chain, extension))
+
+    def update_chain(self):
+        self.chain['alpha'][self.ichain] = self.alpha
+        self.chain['beta'][self.ichain] = self.beta
+        self.chain['sigsqr'][self.ichain] = self.sigsqr
+        self.chain['pi'][self.ichain] = self.pi
+        self.chain['mu'][self.ichain] = self.mu
+        self.chain['T'][self.ichain] = self.T
+        self.chain['mu0'][self.ichain] = self.mu0
+        self.chain['U'][self.ichain] = self.U
+        self.chain['W'][self.ichain] = self.W
+        self.ichain += 1
+
+    def step(self, niter):
+        for i in xrange(niter):
+            self.update_cens_y()
+            old_settings = np.seterr(divide='ignore', invalid='ignore')
+            self.update_xi()
+            self.update_eta()
+            np.seterr(**old_settings)
+            self.update_G()
+            # self.update_alpha_beta()
+            # self.update_sigsqr()
+            # self.update_pi()
+            # self.update_mu()
+            # self.update_T()
+            # self.update_mu0()
+            # self.update_U()
+            # self.update_W()
+            self.update_chain()
 
 
 class LinMix(object):
@@ -861,12 +883,15 @@ class MLinMix(object):
             silent(bool): If true, then suppress updates during sampling.
         """
         # checkiter = 100
+        checkiter = 1
         for c in self.chains:
             c.initial_guess()
-        #     c.initialize_chain(miniter)
+            c.initialize_chain(miniter)
         # for i in xrange(0, miniter, checkiter):
-        #     for c in self.chains:
-        #         c.step(checkiter)
+
+        for i in xrange(0, 1, checkiter):
+            for c in self.chains:
+                c.step(checkiter)
         #     Rhat = self._get_Rhat()
         #
         #     if not silent:
