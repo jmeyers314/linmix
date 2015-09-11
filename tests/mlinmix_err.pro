@@ -544,7 +544,7 @@ repeat begin
                                 ;get unnormalized probability that
                                 ;source i came from Gaussian k, given
                                 ;xi[i]
-            for k = 0, ngauss - 1 do begin                
+            for k = 0, ngauss - 1 do begin
                 xicent = xi[*,*,i] - mu[*,k,i] ## replicate(1, nx)
                 gamma[*,k] = $
                   pi[k,i] / ((2d*!pi)^(np/2d) * determ(T[*,*,k,i], /double)) * $
@@ -605,14 +605,17 @@ repeat begin
             if ngk gt 0 then begin
                                 ;get mu|Xi,G,tausqr,mu0,U
 
+                ; Eqn 86
                 muvar = U_inv[*,*,i] + ngk * Tk_inv[*,*,k,i]
                 mlinmix_posdef_invert, muvar
 
+                ; Eqn 85
                 xibar = total(xi[gk,*,i], 1) / ngk
 
+                ; Eqn 84
                 muhat = (mu0[*,i] ## U_inv[*,*,i] + $
                          ngk * (xibar ## Tk_inv[*,*,k,i])) ## muvar
-
+                stop
                 mu[*,k,i] = muhat + mrandomn(seed, muvar)
 
             endif else mu[*,k,i] = mu0[*,i] + mrandomn(seed, U[*,*,i])
