@@ -614,8 +614,7 @@ repeat begin
 
                 ; Eqn 84
                 muhat = (mu0[*,i] ## U_inv[*,*,i] + $
-                         ngk * (xibar ## Tk_inv[*,*,k,i])) ## muvar
-                stop
+                         ngk * (xibar ## Tk_inv[*,*,k,i])) ## muvar                
                 mu[*,k,i] = muhat + mrandomn(seed, muvar)
 
             endif else mu[*,k,i] = mu0[*,i] + mrandomn(seed, U[*,*,i])

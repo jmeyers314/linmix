@@ -591,7 +591,7 @@ class MultiChain(object):
                 # Eqn (83)
                 self.mu[:, k] = np.random.multivariate_normal(mean=muhat_k, cov=Sigma_muhat_k)
             else:
-                self.mu[:, k] = np.random.normal(mean=self.mu0, cov=self.U)
+                self.mu[:, k] = np.random.multivariate_normal(mean=self.mu0, cov=self.U)
 
     def update_T(self):  # Step 10
         for k in xrange(self.K):
@@ -600,7 +600,7 @@ class MultiChain(object):
                 xicent = self.xi[gk, :] - np.outer(np.ones(self.nk[k]), self.mu[:, k])
                 Smat = np.linalg.inv(self.W + np.dot(xicent.T, xicent))
             else:
-                Smat = np.linalg.inv(W)
+                Smat = np.linalg.inv(self.W)
             Tmat = randomwish(self.nk[k] + self.Np, Smat)
             self.Tk_inv[:, :, k] = Tmat
             self.T[:, :, k] = np.linalg.inv(Tmat)
@@ -620,14 +620,13 @@ class MultiChain(object):
         # Eqn (98)
         self.U = np.linalg.inv(randomwish(nuu, Uhat))
 
-    # def update_wsqr(self):  # Step 13
-    #     # Eqn (102)
-    #     a = 0.5 * (self.K + 3)
-    #     # Eqn (103)
-    #     b = 0.5 * (1.0/self.usqr + np.sum(1.0/self.tausqr))
-    #     # Eqn (101)
-    #     self.wsqr = np.random.gamma(a, 1.0/b)
-    #
+    def update_W(self):  # Step 13
+        # Eqn (106)
+        What = np.linalg.inv(self.U_inv + np.sum(self.Tk_inv, axis=2))
+        # Eqn (105)
+        nuw = (self.K + 2) * self.Np + 1
+        # Eqn (107)
+        self.W = randomwish(nuw, What)
 
     def initialize_chain(self, chain_length):
         self.chain_dtype = [('alpha', float),
@@ -673,7 +672,7 @@ class MultiChain(object):
             self.update_T()
             self.update_mu0()
             self.update_U()
-            # self.update_W()
+            self.update_W()
             self.update_chain()
 
 
@@ -880,6 +879,30 @@ class MLinMix(object):
         self.nchains = nchains
         self.chains = [MultiChain(x, y, xvar, yvar, xycov, delta, K, self.nchains)
                        for i in xrange(self.nchains)]
+        self.Np = np.array(x).shape[1]
+
+    def _get_psi(self):
+        c0 = self.chains[0]
+        ndraw = c0.ichain/2
+        psi = np.empty((ndraw, self.nchains, self.Np+2), dtype=float)
+        psi[:, :, 0] = np.vstack([c.chain['alpha'][0:ndraw] for c in self.chains]).T
+        beta = np.transpose(np.dstack([c.chain['beta'][0:ndraw] for c in self.chains]), (0, 2, 1))
+        psi[:, :, 1:self.Np+1] = beta
+        sigsqr = np.vstack([c.chain['sigsqr'][0:ndraw] for c in self.chains]).T
+        psi[:, :, -1] = np.log(sigsqr)
+        return psi
+
+    def _get_Rhat(self):
+        psi = self._get_psi()
+        ndraw = psi.shape[0]
+        psibarj = np.sum(psi, axis=0)/ndraw
+        psibar = np.mean(psibarj, axis=0)
+        sjsqr = np.sum((psi-psibarj)**2 / (ndraw-1.0), axis=(0, 1))
+        Bvar = ndraw / (self.nchains-1.0) * np.sum((psibarj-psibar)**2, axis=0)
+        Wvar = sjsqr / self.nchains
+        varplus = (1.0 - 1.0 / ndraw) * Wvar + Bvar / ndraw
+        Rhat = np.sqrt(varplus / Wvar)
+        return Rhat
 
     def run_mcmc(self, miniter=5000, maxiter=100000, silent=False):
         """ Run the Markov Chain Monte Carlo for the MLinMix object.
@@ -895,38 +918,33 @@ class MLinMix(object):
             maxiter(int): The maximum number of iterations to use.
             silent(bool): If true, then suppress updates during sampling.
         """
-        # checkiter = 100
-        checkiter = 1
+        checkiter = 100
         for c in self.chains:
             c.initial_guess()
             c.initialize_chain(miniter)
-        # for i in xrange(0, miniter, checkiter):
-
-        for i in xrange(0, 1, checkiter):
+        for i in xrange(0, miniter, checkiter):
             for c in self.chains:
                 c.step(checkiter)
-        #     Rhat = self._get_Rhat()
-        #
-        #     if not silent:
-        #         print
-        #         print "Iteration: ", i+checkiter
-        #         print ("Rhat values for alpha, beta, log(sigma^2)"
-        #                ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-        #         print Rhat
-        #
-        # i += checkiter
-        # while not np.all(Rhat < 1.1) and (i < maxiter):
-        #     for c in self.chains:
-        #         c.extend_chain(checkiter)
-        #         c.step(checkiter)
-        #     Rhat = self._get_Rhat()
-        #     if not silent:
-        #         print
-        #         print "Iteration: ", i+checkiter
-        #         print ("Rhat values for alpha, beta, log(sigma^2)"
-        #                ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-        #         print Rhat
-        #         i += checkiter
-        #
-        # # Throw away first half of each chain
-        # self.chain = np.hstack([c.chain[0:i/2] for c in self.chains])
+            Rhat = self._get_Rhat()
+
+            if not silent:
+                print
+                print "Iteration: ", i+checkiter
+                print "Rhat values for alpha, beta, log(sigma^2):"
+                print Rhat
+
+        i += checkiter
+        while not np.all(Rhat < 1.1) and (i < maxiter):
+            for c in self.chains:
+                c.extend_chain(checkiter)
+                c.step(checkiter)
+            Rhat = self._get_Rhat()
+            if not silent:
+                print
+                print "Iteration: ", i+checkiter
+                print "Rhat values for alpha, beta, log(sigma^2):"
+                print Rhat
+                i += checkiter
+
+        # Throw away first half of each chain
+        self.chain = np.hstack([c.chain[0:i/2] for c in self.chains])
