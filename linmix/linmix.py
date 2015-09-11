@@ -415,6 +415,9 @@ class MultiChain(object):
             self.G = np.argmin(dist, axis=1)
         else:
             self.G = np.ones((self.N,), dtype=int)
+        self.nk = np.empty(self.K, dtype=int)
+        for k in range(self.K):
+            self.nk[k] = np.sum(self.G == k)
 
         # Next get initial guesses for Pi and T
         self.pi = np.empty(self.K, dtype=float)
@@ -566,12 +569,13 @@ class MultiChain(object):
         # Eqn (78)
         self.sigsqr = nu * ssqr / np.random.chisquare(nu)
 
-    # def update_pi(self):  # Step 8
-    #     # Eqn (82)
-    #     self.nk = np.sum(self.G, axis=0)
-    #     # Eqn (81)
-    #     self.pi = np.random.dirichlet(self.nk+1)
-    #
+    def update_pi(self):  # Step 8
+        # Eqn (82)
+        for k in range(self.K):
+            self.nk[k] = np.sum(self.G == k)
+        # Eqn (81)
+        self.pi = np.random.dirichlet(self.nk+1)
+
     # def update_mu(self):  # Step 9
     #     Gsum = np.sum(self.G * self.xi[:, np.newaxis], axis=0)
     #     for k in xrange(self.K):
@@ -659,7 +663,7 @@ class MultiChain(object):
             self.update_G()
             self.update_alpha_beta()
             self.update_sigsqr()
-            # self.update_pi()
+            self.update_pi()
             # self.update_mu()
             # self.update_T()
             # self.update_mu0()
