@@ -605,12 +605,12 @@ class MultiChain(object):
             self.Tk_inv[:, :, k] = Tmat
             self.T[:, :, k] = np.linalg.inv(Tmat)
 
-    # def update_mu0(self):  # Step 11
-    #     # Eqn (94)
-    #     mubar = np.mean(self.mu)
-    #     # Eqn (93)
-    #     self.mu0 = np.random.normal(loc=mubar, scale=np.sqrt(self.usqr/self.K))
-    #
+    def update_mu0(self):  # Step 11
+        # Eqn (94)
+        mubar = np.mean(self.mu, axis=1)
+        # Eqn (93)
+        self.mu0 = np.random.multivariate_normal(mean=mubar, cov=self.U/self.K)
+
     # def update_usqr(self):  # Step 12
     #     # Eqn (96)
     #     nu_u = self.K + 1
@@ -672,7 +672,7 @@ class MultiChain(object):
             self.update_pi()
             self.update_mu()
             self.update_T()
-            # self.update_mu0()
+            self.update_mu0()
             # self.update_U()
             # self.update_W()
             self.update_chain()
