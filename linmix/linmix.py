@@ -534,34 +534,38 @@ class MultiChain(object):
         gamma = np.empty((self.N, self.K), dtype=float)
         for k in range(self.K):
             xicent = self.xi - np.outer(np.ones(self.N), self.mu[:, k])
+            # Eqn (74)
             gamma[:, k] = (
                 self.pi[k] / ((2.0 * np.pi)**(self.Np/2.0) * np.linalg.det(self.T[:, :, k]))
                 * np.exp(-0.5 * np.sum(xicent * np.dot(xicent, self.Tk_inv[:, :, k]), axis=1)))
         norm = np.sum(gamma, axis=1)
         for j in range(self.N):
             gamma0 = gamma[j, :]/norm[j]
+            # Eqn (73)
             Gjk = np.random.multinomial(1, gamma0)
             self.G[j] = np.nonzero(Gjk)[0]
 
-    # def update_alpha_beta(self):  # Step 6
-    #     X = np.ones((self.N, 2), dtype=float)
-    #     X[:, 1] = self.xi
-    #     # Eqn (77)
-    #     XTXinv = np.linalg.inv(np.dot(X.T, X))
-    #     Sigma_chat = XTXinv * self.sigsqr
-    #     # Eqn (76)
-    #     chat = np.dot(np.dot(XTXinv, X.T), self.eta)
-    #     # Eqn (75)
-    #     self.alpha, self.beta = np.random.multivariate_normal(chat, Sigma_chat)
-    #
-    # def update_sigsqr(self):  # Step 7
-    #     # Eqn (80)
-    #     ssqr = 1.0/(self.N-2) * np.sum((self.eta - self.alpha - self.beta * self.xi)**2)
-    #     # Eqn (79)
-    #     nu = self.N - 2
-    #     # Eqn (78)
-    #     self.sigsqr = nu * ssqr / np.random.chisquare(nu)
-    #
+    def update_alpha_beta(self):  # Step 6
+        X = np.ones((self.N, self.Np+1), dtype=float)
+        X[:, 1:] = self.xi
+        # Eqn (77)
+        XTXinv = np.linalg.inv(np.dot(X.T, X))
+        Sigma_chat = XTXinv * self.sigsqr
+        # Eqn (76)
+        chat = np.dot(np.dot(XTXinv, X.T), self.eta)
+        # Eqn (75)
+        x = np.random.multivariate_normal(chat, Sigma_chat)
+        self.alpha = x[0]
+        self.beta = x[1:]
+
+    def update_sigsqr(self):  # Step 7
+        # Eqn (80)
+        ssqr = 1.0/(self.N-2) * np.sum((self.eta - self.alpha - np.dot(self.xi, self.beta))**2)
+        # Eqn (79)
+        nu = self.N - 2
+        # Eqn (78)
+        self.sigsqr = nu * ssqr / np.random.chisquare(nu)
+
     # def update_pi(self):  # Step 8
     #     # Eqn (82)
     #     self.nk = np.sum(self.G, axis=0)
@@ -653,8 +657,8 @@ class MultiChain(object):
             self.update_eta()
             np.seterr(**old_settings)
             self.update_G()
-            # self.update_alpha_beta()
-            # self.update_sigsqr()
+            self.update_alpha_beta()
+            self.update_sigsqr()
             # self.update_pi()
             # self.update_mu()
             # self.update_T()
