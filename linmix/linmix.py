@@ -611,16 +611,15 @@ class MultiChain(object):
         # Eqn (93)
         self.mu0 = np.random.multivariate_normal(mean=mubar, cov=self.U/self.K)
 
-    # def update_usqr(self):  # Step 12
-    #     # Eqn (96)
-    #     nu_u = self.K + 1
-    #     # Eqn (97)
-    #     usqrhat = 1.0/nu_u * (self.wsqr + np.sum((self.mu - self.mu0)**2))
-    #     usqr = np.inf
-    #     while not usqr <= self.usqrmax:
-    #         usqr = usqrhat * nu_u / np.random.chisquare(nu_u)
-    #     self.usqr = usqr
-    #
+    def update_U(self):  # Step 12
+        mucent = self.mu - np.outer(self.mu0, np.ones(self.K))
+        # Eqn (100)
+        Uhat = self.W + np.dot(mucent, mucent.T)
+        # Eqn (99)
+        nuu = self.K + self.Np
+        # Eqn (98)
+        self.U = np.linalg.inv(randomwish(nuu, Uhat))
+
     # def update_wsqr(self):  # Step 13
     #     # Eqn (102)
     #     a = 0.5 * (self.K + 3)
@@ -673,7 +672,7 @@ class MultiChain(object):
             self.update_mu()
             self.update_T()
             self.update_mu0()
-            # self.update_U()
+            self.update_U()
             # self.update_W()
             self.update_chain()
 
