@@ -39,7 +39,6 @@ def generate_test_data():
 
     return x, y, xvar, yvar
 
-
 def run():
     import astropy.io.ascii as ascii
     try:
@@ -53,7 +52,13 @@ def run():
 
     lm = linmix.MLinMix(x, a['y'], xvar, a['yvar'])
     lm.run_mcmc()
-
+    dtype=[('alpha', float), ('beta0', float), ('beta1', float), ('sigsqr', float)]
+    out = np.empty((len(lm.chain),), dtype=dtype)
+    out['alpha'] = lm.chain['alpha']
+    out['beta0'] = lm.chain['beta'][:, 0]
+    out['beta1'] = lm.chain['beta'][:, 1]
+    out['sigsqr'] = lm.chain['sigsqr']
+    ascii.write(out, 'test_mlinmix.pyout')
 
 if __name__ == '__main__':
     run()

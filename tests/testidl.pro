@@ -9,5 +9,4 @@ Pro testidl
             fmt='(9f12.5)', $
             filnum = lun
   close, lun
-  stop
 end

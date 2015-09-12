@@ -47,8 +47,8 @@ def run():
 
     lm = linmix.LinMix(a['x'], a['y'], a['xsig'], a['ysig'], delta=a['delta'])
     lm.run_mcmc()
-    import ipdb; ipdb.set_trace()
-    # ascii.write(lm.chain, 'test.pyout')
+    outcols = ['alpha', 'beta', 'sigsqr', 'mu0', 'usqr', 'wsqr', 'ximean', 'xisig', 'corr']
+    ascii.write(lm.chain[outcols], 'test.pyout')
 
 if __name__ == '__main__':
     run()

@@ -9,7 +9,7 @@ Pro testidl_mlinmix
   endfor
   mlinmix_err, x, y, post, xvar=xvar, yvar=yvar
   openw, lun, 'test_mlinmix.idlout', /get_lun
-  printf, lun, 'alpha beta1 beta2'
+  printf, lun, 'alpha beta0 beta1 sigsqr'
   writecol, 'junk', post.alpha, post.beta[0], post.beta[1], post.sigsqr, $
             fmt='(4f12.5)', $
             filnum = lun

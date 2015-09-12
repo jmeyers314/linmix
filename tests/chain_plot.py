@@ -1,5 +1,4 @@
 import numpy as np
-import triangle
 import astropy.io.ascii as ascii
 import matplotlib.pyplot as plt
 
