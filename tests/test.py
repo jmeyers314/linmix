@@ -47,7 +47,10 @@ def run():
 
     lm = linmix.LinMix(a['x'], a['y'], a['xsig'], a['ysig'], delta=a['delta'])
     lm.run_mcmc()
-    # ascii.write(lm.chain, 'test.pyout')
+    ascii.write(lm.chain[['alpha', 'beta', 'sigsqr',
+                          'mu0', 'usqr', 'wsqr',
+                          'ximean', 'xisig', 'corr']],
+                'test.pyout')
 
 if __name__ == '__main__':
     run()
