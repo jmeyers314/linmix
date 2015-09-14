@@ -4,7 +4,8 @@
 import numpy as np
 
 
-def task_manager(chain, conn):
+def task_manager(conn):
+    chain = None
     while True:
         message = conn.recv()
         if message['task'] == 'init':
@@ -408,19 +409,21 @@ class LinMix(object):
             # Create chain pool.
             self.pool = []
             for sp in slave_pipes:
-                chain = None
-                self.pool.append(Process(target=task_manager, args=(chain, sp)))
+                self.pool.append(Process(target=task_manager, args=(sp,)))
                 self.pool[-1].start()
 
-            init_kwargs = {'x':x,
-                           'y':y,
-                           'xsig':xsig,
-                           'ysig':ysig,
-                           'xycov':xycov,
-                           'delta':delta,
-                           'K':K,
-                           'nchains':self.nchains}
-            for p in self.pipes:
+            init_kwargs0 = {'x':x,
+                            'y':y,
+                            'xsig':xsig,
+                            'ysig':ysig,
+                            'xycov':xycov,
+                            'delta':delta,
+                            'K':K,
+                            'nchains':self.nchains}
+            seed = np.random.randint(2**32)
+            for i, p in enumerate(self.pipes):
+                init_kwargs = init_kwargs0.copy()
+                init_kwargs['rng'] = np.random.RandomState(seed+i)
                 p.send({'task':'init',
                         'init_args':init_kwargs})
         else:
