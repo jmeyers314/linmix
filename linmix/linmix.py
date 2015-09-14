@@ -24,7 +24,7 @@ def task_manager(chain, conn):
             raise ValueError("Invalid task")
 
 class Chain(object):
-    def __init__(self, x, y, xsig, ysig, xycov, delta, K, nchains):
+    def __init__(self, x, y, xsig, ysig, xycov, delta, K, nchains, rng=None):
         self.x = np.array(x, dtype=float)
         self.y = np.array(y, dtype=float)
 
@@ -62,6 +62,10 @@ class Chain(object):
         else:
             self.delta = np.array(delta, dtype=bool)
 
+        if rng is None:
+            rng = np.random.RandomState()
+        self.rng = rng
+
         self.initialized = False
 
     def initial_guess(self):  # Step 1
@@ -91,11 +95,11 @@ class Chain(object):
         X = np.ones((N, 2), dtype=float)
         X[:, 1] = x
         Sigma = np.linalg.inv(np.dot(X.T, X)) * self.sigsqr
-        coef = np.random.multivariate_normal([0, 0], Sigma)
-        chisqr = np.random.chisquare(self.nchains)
+        coef = self.rng.multivariate_normal([0, 0], Sigma)
+        chisqr = self.rng.chisquare(self.nchains)
         self.alpha += coef[0] * np.sqrt(1.0/chisqr)
         self.beta += coef[1] * np.sqrt(1.0/chisqr)
-        self.sigsqr *= 0.5 * N / np.random.chisquare(0.5*N)
+        self.sigsqr *= 0.5 * N / self.rng.chisquare(0.5*N)
 
         # Now get the values for the mixture parameters, first do prior params
         self.mu0min = min(x)
@@ -103,19 +107,19 @@ class Chain(object):
 
         mu0g = np.nan
         while not (mu0g > self.mu0min) & (mu0g < self.mu0max):
-            mu0g = self.mu0 + (np.random.normal(scale=np.sqrt(np.var(x, ddof=1) / N)) /
-                               np.sqrt(self.nchains/np.random.chisquare(self.nchains)))
+            mu0g = self.mu0 + (self.rng.normal(scale=np.sqrt(np.var(x, ddof=1) / N)) /
+                               np.sqrt(self.nchains/self.rng.chisquare(self.nchains)))
         self.mu0 = mu0g
 
         # wsqr is the global scale
-        self.wsqr *= 0.5 * N / np.random.chisquare(0.5 * N)
+        self.wsqr *= 0.5 * N / self.rng.chisquare(0.5 * N)
 
         self.usqrmax = 1.5 * np.var(x, ddof=1)
         self.usqr = 0.5 * np.var(x, ddof=1)
 
-        self.tausqr = 0.5 * self.wsqr * self.nchains / np.random.chisquare(self.nchains, size=K)
+        self.tausqr = 0.5 * self.wsqr * self.nchains / self.rng.chisquare(self.nchains, size=K)
 
-        self.mu = self.mu0 + np.random.normal(scale=np.sqrt(self.wsqr), size=K)
+        self.mu = self.mu0 + self.rng.normal(scale=np.sqrt(self.wsqr), size=K)
 
         # get initial group proportions and group labels
 
@@ -129,7 +133,7 @@ class Chain(object):
                 minind = np.argmin(abs(x[i] - self.mu))
                 pig[minind] += 1
                 self.G[i, minind] = 1
-            self.pi = np.random.dirichlet(pig+1)
+            self.pi = self.rng.dirichlet(pig+1)
 
         self.eta = y.copy()
         self.y_ul = y.copy()
@@ -142,9 +146,9 @@ class Chain(object):
     def update_cens_y(self):  # Step 2
         todo = self.cens[:]
         while len(todo) > 0:
-            self.y[todo] = np.random.normal(loc=self.eta[todo],
-                                            scale=np.sqrt(self.yvar[todo]),
-                                            size=len(todo))
+            self.y[todo] = self.rng.normal(loc=self.eta[todo],
+                                           scale=np.sqrt(self.yvar[todo]),
+                                           size=len(todo))
             todo = np.nonzero(np.logical_not(self.delta) & (self.y > self.y_ul))[0]
 
     def update_xi(self):  # Step 3
@@ -169,8 +173,8 @@ class Chain(object):
         # Eqn (54)
         xihat_i = np.sum(self.G * xihat_ik, axis=1)
         # Eqn (53)
-        self.xi[wxerr] = np.random.normal(loc=xihat_i[wxerr],
-                                          scale=np.sqrt(sigma_xihat_i_sqr[wxerr]))
+        self.xi[wxerr] = self.rng.normal(loc=xihat_i[wxerr],
+                                         scale=np.sqrt(sigma_xihat_i_sqr[wxerr]))
 
     def update_eta(self):  # Step 4
         wxerr = self.wxerr
@@ -186,8 +190,8 @@ class Chain(object):
         etahat_i = (sigma_etahat_i_sqr * (etaxy / etaxyvar
                     + (self.alpha + self.beta * self.xi) / self.sigsqr))
         # Eqn (66)
-        self.eta[wyerr] = np.random.normal(loc=etahat_i[wyerr],
-                                           scale=np.sqrt(sigma_etahat_i_sqr[wyerr]))
+        self.eta[wyerr] = self.rng.normal(loc=etahat_i[wyerr],
+                                          scale=np.sqrt(sigma_etahat_i_sqr[wyerr]))
 
     def update_G(self):  # Step 5
         # Eqn (74)
@@ -196,7 +200,7 @@ class Chain(object):
         q_ki = piNp / np.sum(piNp, axis=1)[:, np.newaxis]
         # Eqn (73)
         for i in xrange(self.N):
-            self.G[i] = np.random.multinomial(1, q_ki[i])
+            self.G[i] = self.rng.multinomial(1, q_ki[i])
 
     def update_alpha_beta(self):  # Step 6
         X = np.ones((self.N, 2), dtype=float)
@@ -207,7 +211,7 @@ class Chain(object):
         # Eqn (76)
         chat = np.dot(np.dot(XTXinv, X.T), self.eta)
         # Eqn (75)
-        self.alpha, self.beta = np.random.multivariate_normal(chat, Sigma_chat)
+        self.alpha, self.beta = self.rng.multivariate_normal(chat, Sigma_chat)
 
     def update_sigsqr(self):  # Step 7
         # Eqn (80)
@@ -215,13 +219,13 @@ class Chain(object):
         # Eqn (79)
         nu = self.N - 2
         # Eqn (78)
-        self.sigsqr = nu * ssqr / np.random.chisquare(nu)
+        self.sigsqr = nu * ssqr / self.rng.chisquare(nu)
 
     def update_pi(self):  # Step 8
         # Eqn (82)
         self.nk = np.sum(self.G, axis=0)
         # Eqn (81)
-        self.pi = np.random.dirichlet(self.nk+1)
+        self.pi = self.rng.dirichlet(self.nk+1)
 
     def update_mu(self):  # Step 9
         Gsum = np.sum(self.G * self.xi[:, np.newaxis], axis=0)
@@ -234,9 +238,9 @@ class Chain(object):
                 # Eqn (84)
                 muhat_k = Sigma_muhat_k * (self.mu0/self.usqr + self.nk[k]/self.tausqr[k]*xibar_k)
                 # Eqn (83)
-                self.mu[k] = np.random.normal(loc=muhat_k, scale=np.sqrt(Sigma_muhat_k))
+                self.mu[k] = self.rng.normal(loc=muhat_k, scale=np.sqrt(Sigma_muhat_k))
             else:
-                self.mu[k] = np.random.normal(loc=self.mu0, scale=np.sqrt(self.usqr))
+                self.mu[k] = self.rng.normal(loc=self.mu0, scale=np.sqrt(self.usqr))
 
     def update_tausqr(self):  # Step 10
         # Eqn (88)
@@ -244,13 +248,13 @@ class Chain(object):
         # Eqn (89)
         tk_sqr = 1.0/nu_k * (self.wsqr + np.sum(self.G*(self.xi[:, np.newaxis]-self.mu)**2, axis=0))
         # Eqn (87)
-        self.tausqr = tk_sqr * nu_k / np.random.chisquare(nu_k, size=self.K)
+        self.tausqr = tk_sqr * nu_k / self.rng.chisquare(nu_k, size=self.K)
 
     def update_mu0(self):  # Step 11
         # Eqn (94)
         mubar = np.mean(self.mu)
         # Eqn (93)
-        self.mu0 = np.random.normal(loc=mubar, scale=np.sqrt(self.usqr/self.K))
+        self.mu0 = self.rng.normal(loc=mubar, scale=np.sqrt(self.usqr/self.K))
 
     def update_usqr(self):  # Step 12
         # Eqn (96)
@@ -259,7 +263,7 @@ class Chain(object):
         usqrhat = 1.0/nu_u * (self.wsqr + np.sum((self.mu - self.mu0)**2))
         usqr = np.inf
         while not usqr <= self.usqrmax:
-            usqr = usqrhat * nu_u / np.random.chisquare(nu_u)
+            usqr = usqrhat * nu_u / self.rng.chisquare(nu_u)
         self.usqr = usqr
 
     def update_wsqr(self):  # Step 13
@@ -268,7 +272,7 @@ class Chain(object):
         # Eqn (103)
         b = 0.5 * (1.0/self.usqr + np.sum(1.0/self.tausqr))
         # Eqn (101)
-        self.wsqr = np.random.gamma(a, 1.0/b)
+        self.wsqr = self.rng.gamma(a, 1.0/b)
 
     def initialize_chain(self, chain_length):
         self.chain_dtype = [('alpha', float),
