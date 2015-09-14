@@ -4,6 +4,25 @@
 import numpy as np
 
 
+def task_manager(chain, conn):
+    while True:
+        message = conn.recv()
+        if message['task'] == 'init':
+            chain = Chain(**message['init_args'])
+            chain.initial_guess()
+        elif message['task'] == 'init_chain':
+            chain.initialize_chain(message['miniter'])
+        elif message['task'] == 'step':
+            chain.step(message['niter'])
+        elif message['task'] == 'extend':
+            chain.extend(message['niter'])
+        elif message['task'] == 'fetch':
+            conn.send(chain.__dict__[message['key']])
+        elif message['task'] == 'kill':
+            break
+        else:
+            raise ValueError("Invalid task")
+
 class Chain(object):
     def __init__(self, x, y, xsig, ysig, xycov, delta, K, nchains):
         self.x = np.array(x, dtype=float)
@@ -267,7 +286,7 @@ class Chain(object):
         self.chain = np.empty((chain_length,), dtype=self.chain_dtype)
         self.ichain = 0
 
-    def extend_chain(self, length):
+    def extend(self, length):
         extension = np.empty((length), dtype=self.chain_dtype)
         self.chain = np.hstack((self.chain, extension))
 
@@ -340,6 +359,7 @@ class LinMix(object):
             detected.
         K(int): The number of Gaussians to use in the mixture model for the distribution of xi.
         nchains(int): The number of Monte Carlo Markov Chains to instantiate.
+        parallelize(bool): Use a separate thread for each chain.  Only makes sense for nchains > 1.
 
     Attributes:
         nchains(int): The number of instantiated MCMCs.
@@ -365,27 +385,70 @@ class LinMix(object):
                 - corr(float): The linear correlation coefficient between the latent dependent and
                     independent variables `xi` and `eta`.
     """
-    def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3, nchains=4):
+    def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3,
+                 nchains=4, parallelize=True):
         self.nchains = nchains
-        self.chains = [Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains)
-                       for i in xrange(self.nchains)]
+        self.parallelize = parallelize
+
+        if self.parallelize:
+            # Will place 1 chain in 1 thread.
+            from multiprocessing import Process, Pipe
+            # Create a pipe for each thread.
+            self.pipes = []
+            slave_pipes = []
+            for i in range(self.nchains):
+                master_pipe, slave_pipe = Pipe()
+                self.pipes.append(master_pipe)
+                slave_pipes.append(slave_pipe)
+
+            # Create chain pool.
+            self.pool = []
+            for sp in slave_pipes:
+                chain = None
+                self.pool.append(Process(target=task_manager, args=(chain, sp)))
+                self.pool[-1].start()
+
+            init_kwargs = {'x':x,
+                           'y':y,
+                           'xsig':xsig,
+                           'ysig':ysig,
+                           'xycov':xycov,
+                           'delta':delta,
+                           'K':K,
+                           'nchains':self.nchains}
+            for p in self.pipes:
+                p.send({'task':'init',
+                        'init_args':init_kwargs})
+        else:
+            self.chains = []
+            for i in xrange(self.nchains):
+                self.chains.append(Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains))
+                self.chains[-1].initial_guess()
 
     def _get_psi(self):
-        c0 = self.chains[0]
-        ndraw = c0.ichain/2
+        if self.parallelize:
+            for p in self.pipes:
+                p.send({'task':'fetch',
+                        'key':'chain'})
+            chains = [p.recv() for p in self.pipes]
+            self.pipes[0].send({'task':'fetch',
+                                'key':'ichain'})
+            ndraw = self.pipes[0].recv()/2
+        else:
+            chains = [c.chain for c in self.chains]
+            ndraw = self.chains[0].ichain/2
         psi = np.empty((ndraw, self.nchains, 6), dtype=float)
-        psi[:, :, 0] = np.vstack([c.chain['alpha'][0:ndraw] for c in self.chains]).T
-        beta = np.vstack([c.chain['beta'][0:ndraw] for c in self.chains]).T
+        psi[:, :, 0] = np.vstack([c['alpha'][0:ndraw] for c in chains]).T
+        beta = np.vstack([c['beta'][0:ndraw] for c in chains]).T
         psi[:, :, 1] = beta
-        sigsqr = np.vstack([c.chain['sigsqr'][0:ndraw] for c in self.chains]).T
+        sigsqr = np.vstack([c['sigsqr'][0:ndraw] for c in chains]).T
         psi[:, :, 2] = np.log(sigsqr)
-        ximean = np.vstack([np.sum(c.chain['pi'][0:ndraw] * c.chain['mu'][0:ndraw], axis=1)
-                            for c in self.chains]).T
+        ximean = np.vstack([np.sum(c['pi'][0:ndraw] * c['mu'][0:ndraw], axis=1)
+                            for c in chains]).T
         psi[:, :, 3] = ximean
-        xivar = np.vstack([np.sum(c.chain['pi'][0:ndraw] * (c.chain['tausqr'][0:ndraw] +
-                                                            c.chain['mu'][0:ndraw]**2),
+        xivar = np.vstack([np.sum(c['pi'][0:ndraw] * (c['tausqr'][0:ndraw] + c['mu'][0:ndraw]**2),
                                   axis=1)
-                           for c in self.chains]).T - ximean**2
+                           for c in chains]).T - ximean**2
         psi[:, :, 4] = xivar
         psi[:, :, 5] = np.arctanh(beta * np.sqrt(xivar / (beta**2 * xivar + sigsqr)))
         return psi
@@ -417,34 +480,75 @@ class LinMix(object):
             silent(bool): If true, then suppress updates during sampling.
         """
         checkiter = 100
-        for c in self.chains:
-            c.initial_guess()
-            c.initialize_chain(miniter)
-        for i in xrange(0, miniter, checkiter):
+        if self.parallelize:
+            for p in self.pipes:
+                p.send({'task':'init_chain',
+                        'miniter':miniter})
+            for i in xrange(0, miniter, checkiter):
+                for p in self.pipes:
+                    p.send({'task':'step',
+                            'niter':checkiter})
+                Rhat = self._get_Rhat()
+
+                if not silent:
+                    print
+                    print "Iteration: ", i+checkiter
+                    print ("Rhat values for alpha, beta, log(sigma^2)"
+                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
+                    print Rhat
+
+            i += checkiter
+            while not np.all(Rhat < 1.1) and (i < maxiter):
+                for p in self.pipes:
+                    p.send({'task':'extend',
+                            'niter':checkiter})
+                    p.send({'task':'step',
+                            'niter':checkiter})
+                Rhat = self._get_Rhat()
+                if not silent:
+                    print
+                    print "Iteration: ", i+checkiter
+                    print ("Rhat values for alpha, beta, log(sigma^2)"
+                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
+                    print Rhat
+                    i += checkiter
+
+            # Throw away first half of each chain
+            for p in self.pipes:
+                p.send({'task':'fetch',
+                        'key':'chain'})
+            self.chain = np.hstack([p.recv()[0:i/2] for p in self.pipes])
+            for p in self.pipes:
+                p.send({'task':'kill'})
+
+        else:
             for c in self.chains:
-                c.step(checkiter)
-            Rhat = self._get_Rhat()
+                c.initialize_chain(miniter)
+            for i in xrange(0, miniter, checkiter):
+                for c in self.chains:
+                    c.step(checkiter)
+                Rhat = self._get_Rhat()
 
-            if not silent:
-                print
-                print "Iteration: ", i+checkiter
-                print ("Rhat values for alpha, beta, log(sigma^2)"
-                       ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                print Rhat
+                if not silent:
+                    print
+                    print "Iteration: ", i+checkiter
+                    print ("Rhat values for alpha, beta, log(sigma^2)"
+                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
+                    print Rhat
 
-        i += checkiter
-        while not np.all(Rhat < 1.1) and (i < maxiter):
-            for c in self.chains:
-                c.extend_chain(checkiter)
-                c.step(checkiter)
-            Rhat = self._get_Rhat()
-            if not silent:
-                print
-                print "Iteration: ", i+checkiter
-                print ("Rhat values for alpha, beta, log(sigma^2)"
-                       ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                print Rhat
-                i += checkiter
+            i += checkiter
+            while not np.all(Rhat < 1.1) and (i < maxiter):
+                for c in self.chains:
+                    c.extend(checkiter)
+                    c.step(checkiter)
+                Rhat = self._get_Rhat()
+                if not silent:
+                    print
+                    print "Iteration: ", i+checkiter
+                    print ("Rhat values for alpha, beta, log(sigma^2)"
+                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
+                    print Rhat
+                    i += checkiter
 
-        # Throw away first half of each chain
-        self.chain = np.hstack([c.chain[0:i/2] for c in self.chains])
+            # Throw away first half of each chain
+            self.chain = np.hstack([c.chain[0:i/2] for c in self.chains])
