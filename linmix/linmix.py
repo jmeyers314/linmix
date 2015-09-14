@@ -427,10 +427,10 @@ class LinMix(object):
                 p.send({'task':'init',
                         'init_args':init_kwargs})
         else:
-            self.chains = []
+            self._chains = []
             for i in xrange(self.nchains):
-                self.chains.append(Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains))
-                self.chains[-1].initial_guess()
+                self._chains.append(Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains))
+                self._chains[-1].initial_guess()
 
     def _get_psi(self):
         if self.parallelize:
@@ -442,8 +442,8 @@ class LinMix(object):
                                 'key':'ichain'})
             ndraw = self.pipes[0].recv()/2
         else:
-            chains = [c.chain for c in self.chains]
-            ndraw = self.chains[0].ichain/2
+            chains = [c.chain for c in self._chains]
+            ndraw = self._chains[0].ichain/2
         psi = np.empty((ndraw, self.nchains, 6), dtype=float)
         psi[:, :, 0] = np.vstack([c['alpha'][0:ndraw] for c in chains]).T
         beta = np.vstack([c['beta'][0:ndraw] for c in chains]).T
@@ -472,6 +472,42 @@ class LinMix(object):
         Rhat = np.sqrt(varplus / Wvar)
         return Rhat
 
+    def _initialize_chains(self, miniter):
+        if self.parallelize:
+            for p in self.pipes:
+                p.send({'task':'init_chain',
+                        'miniter':miniter})
+        else:
+            for c in self._chains:
+                c.initialize_chain(miniter)
+
+    def _step(self, niter):
+        if self.parallelize:
+            for p in self.pipes:
+                p.send({'task':'step',
+                        'niter':niter})
+        else:
+            for c in self._chains:
+                c.step(niter)
+
+    def _extend(self, niter):
+        if self.parallelize:
+            for p in self.pipes:
+                p.send({'task':'extend',
+                        'niter':checkiter})
+        else:
+            for c in self._chains:
+                c.extend(niter)
+
+    def _build_chain(self, ikeep):
+        if self.parallelize:
+            for p in self.pipes:
+                p.send({'task':'fetch',
+                        'key':'chain'})
+            self.chain = np.hstack([p.recv()[ikeep:] for p in self.pipes])
+        else:
+            self.chain = np.hstack([c.chain[ikeep:] for c in self._chains])
+
     def run_mcmc(self, miniter=5000, maxiter=100000, silent=False):
         """ Run the Markov Chain Monte Carlo for the LinMix object.
 
@@ -487,75 +523,35 @@ class LinMix(object):
             silent(bool): If true, then suppress updates during sampling.
         """
         checkiter = 100
+        self._initialize_chains(miniter)
+        for i in xrange(0, miniter, checkiter):
+            self._step(checkiter)
+            Rhat = self._get_Rhat()
+
+            if not silent:
+                print
+                print "Iteration: ", i+checkiter
+                print ("Rhat values for alpha, beta, log(sigma^2)"
+                       ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
+                print Rhat
+
+        i += checkiter
+        while not np.all(Rhat < 1.1) and (i < maxiter):
+            self._extend(checkiter)
+            self._step(checkiter)
+
+            Rhat = self._get_Rhat()
+            if not silent:
+                print
+                print "Iteration: ", i+checkiter
+                print ("Rhat values for alpha, beta, log(sigma^2)"
+                       ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
+                print Rhat
+                i += checkiter
+
+        # Throw away first half of each chain
+        self._build_chain(i/2)
+        # Clean up threads
         if self.parallelize:
             for p in self.pipes:
-                p.send({'task':'init_chain',
-                        'miniter':miniter})
-            for i in xrange(0, miniter, checkiter):
-                for p in self.pipes:
-                    p.send({'task':'step',
-                            'niter':checkiter})
-                Rhat = self._get_Rhat()
-
-                if not silent:
-                    print
-                    print "Iteration: ", i+checkiter
-                    print ("Rhat values for alpha, beta, log(sigma^2)"
-                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                    print Rhat
-
-            i += checkiter
-            while not np.all(Rhat < 1.1) and (i < maxiter):
-                for p in self.pipes:
-                    p.send({'task':'extend',
-                            'niter':checkiter})
-                    p.send({'task':'step',
-                            'niter':checkiter})
-                Rhat = self._get_Rhat()
-                if not silent:
-                    print
-                    print "Iteration: ", i+checkiter
-                    print ("Rhat values for alpha, beta, log(sigma^2)"
-                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                    print Rhat
-                    i += checkiter
-
-            # Throw away first half of each chain
-            for p in self.pipes:
-                p.send({'task':'fetch',
-                        'key':'chain'})
-            self.chain = np.hstack([p.recv()[0:i/2] for p in self.pipes])
-            for p in self.pipes:
                 p.send({'task':'kill'})
-
-        else:
-            for c in self.chains:
-                c.initialize_chain(miniter)
-            for i in xrange(0, miniter, checkiter):
-                for c in self.chains:
-                    c.step(checkiter)
-                Rhat = self._get_Rhat()
-
-                if not silent:
-                    print
-                    print "Iteration: ", i+checkiter
-                    print ("Rhat values for alpha, beta, log(sigma^2)"
-                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                    print Rhat
-
-            i += checkiter
-            while not np.all(Rhat < 1.1) and (i < maxiter):
-                for c in self.chains:
-                    c.extend(checkiter)
-                    c.step(checkiter)
-                Rhat = self._get_Rhat()
-                if not silent:
-                    print
-                    print "Iteration: ", i+checkiter
-                    print ("Rhat values for alpha, beta, log(sigma^2)"
-                           ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                    print Rhat
-                    i += checkiter
-
-            # Throw away first half of each chain
-            self.chain = np.hstack([c.chain[0:i/2] for c in self.chains])
