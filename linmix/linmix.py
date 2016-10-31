@@ -365,6 +365,7 @@ class LinMix(object):
         K(int): The number of Gaussians to use in the mixture model for the distribution of xi.
         nchains(int): The number of Monte Carlo Markov Chains to instantiate.
         parallelize(bool): Use a separate thread for each chain.  Only makes sense for nchains > 1.
+        seed(int): Random seed.  If `None`, then get seed from np.random.randint().
 
     Attributes:
         nchains(int): The number of instantiated MCMCs.
@@ -391,9 +392,12 @@ class LinMix(object):
                     independent variables `xi` and `eta`.
     """
     def __init__(self, x, y, xsig=None, ysig=None, xycov=None, delta=None, K=3,
-                 nchains=4, parallelize=True):
+                 nchains=4, parallelize=True, seed=None):
         self.nchains = nchains
         self.parallelize = parallelize
+
+        if seed is None:
+            seed = np.random.randint(2**32-1)
 
         if self.parallelize:
             # Will place 1 chain in 1 thread.
@@ -420,7 +424,6 @@ class LinMix(object):
                             'delta':delta,
                             'K':K,
                             'nchains':self.nchains}
-            seed = np.random.randint(2**32)
             for i, p in enumerate(self.pipes):
                 init_kwargs = init_kwargs0.copy()
                 init_kwargs['rng'] = np.random.RandomState(seed+i)
