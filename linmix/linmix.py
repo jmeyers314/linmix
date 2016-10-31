@@ -497,7 +497,7 @@ class LinMix(object):
         if self.parallelize:
             for p in self.pipes:
                 p.send({'task':'extend',
-                        'niter':checkiter})
+                        'niter':niter})
         else:
             for c in self._chains:
                 c.extend(niter)
