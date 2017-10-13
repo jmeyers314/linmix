@@ -23,11 +23,11 @@ ax.plot(truex, truey, c='k', lw=2)
 
 # Plot samples of the regression line
 samplex = truex
-for i in xrange(0, len(pyout), len(pyout)/50):
+for i in range(0, len(pyout), len(pyout)//50):
     sampley = pyout[i]['alpha'] + pyout[i]['beta'] * samplex
     ax.plot(samplex, sampley, c='b', alpha=0.1)
 
-for i in xrange(0, len(pyout), len(pyout)/50):
+for i in range(0, len(pyout), len(pyout)//50):
     sampley = idlout[i]['alpha'] + idlout[i]['beta'] * samplex
     ax.plot(samplex, sampley, c='r', alpha=0.1)
 
