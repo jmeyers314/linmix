@@ -1,6 +1,8 @@
 """ linmix -- A hierarchical Bayesian approach to linear regression with error in both X and Y.
 """
 
+from __future__ import print_function
+
 import numpy as np
 
 
@@ -130,7 +132,7 @@ class Chain(object):
             self.pi = np.array([1], dtype=float)
         else:
             self.G = np.zeros((N, K), dtype=int)
-            for i in xrange(N):
+            for i in range(N):
                 minind = np.argmin(abs(x[i] - self.mu))
                 pig[minind] += 1
                 self.G[i, minind] = 1
@@ -200,7 +202,7 @@ class Chain(object):
                           * np.exp(-0.5 * (self.xi[:, np.newaxis] - self.mu)**2 / self.tausqr))
         q_ki = piNp / np.sum(piNp, axis=1)[:, np.newaxis]
         # Eqn (73)
-        for i in xrange(self.N):
+        for i in range(self.N):
             self.G[i] = self.rng.multinomial(1, q_ki[i])
 
     def update_alpha_beta(self):  # Step 6
@@ -230,7 +232,7 @@ class Chain(object):
 
     def update_mu(self):  # Step 9
         Gsum = np.sum(self.G * self.xi[:, np.newaxis], axis=0)
-        for k in xrange(self.K):
+        for k in range(self.K):
             if self.nk[k] != 0:
                 # Eqn (86)
                 Sigma_muhat_k = 1.0/(1.0/self.usqr + self.nk[k]/self.tausqr[k])
@@ -314,7 +316,7 @@ class Chain(object):
         self.ichain += 1
 
     def step(self, niter):
-        for i in xrange(niter):
+        for i in range(niter):
             self.update_cens_y()
             old_settings = np.seterr(divide='ignore', invalid='ignore')
             self.update_xi()
@@ -431,7 +433,7 @@ class LinMix(object):
                         'init_args':init_kwargs})
         else:
             self._chains = []
-            for i in xrange(self.nchains):
+            for i in range(self.nchains):
                 self._chains.append(Chain(x, y, xsig, ysig, xycov, delta, K, self.nchains))
                 self._chains[-1].initial_guess()
 
@@ -443,10 +445,10 @@ class LinMix(object):
             chains = [p.recv() for p in self.pipes]
             self.pipes[0].send({'task':'fetch',
                                 'key':'ichain'})
-            ndraw = self.pipes[0].recv()/2
+            ndraw = int(self.pipes[0].recv()/2)
         else:
             chains = [c.chain for c in self._chains]
-            ndraw = self._chains[0].ichain/2
+            ndraw = int(self._chains[0].ichain/2)
         psi = np.empty((ndraw, self.nchains, 6), dtype=float)
         psi[:, :, 0] = np.vstack([c['alpha'][0:ndraw] for c in chains]).T
         beta = np.vstack([c['beta'][0:ndraw] for c in chains]).T
@@ -527,16 +529,16 @@ class LinMix(object):
         """
         checkiter = 100
         self._initialize_chains(miniter)
-        for i in xrange(0, miniter, checkiter):
+        for i in range(0, miniter, checkiter):
             self._step(checkiter)
             Rhat = self._get_Rhat()
 
             if not silent:
-                print
-                print "Iteration: ", i+checkiter
+                print()
+                print("Iteration: ", i+checkiter)
                 print ("Rhat values for alpha, beta, log(sigma^2)"
                        ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                print Rhat
+                print(Rhat)
 
         i += checkiter
         while not np.all(Rhat < 1.1) and (i < maxiter):
@@ -545,15 +547,15 @@ class LinMix(object):
 
             Rhat = self._get_Rhat()
             if not silent:
-                print
-                print "Iteration: ", i+checkiter
+                print()
+                print("Iteration: ", i+checkiter)
                 print ("Rhat values for alpha, beta, log(sigma^2)"
                        ", mean(xi), log(var(xi)), atanh(corr(xi, eta)):")
-                print Rhat
+                print(Rhat)
                 i += checkiter
 
         # Throw away first half of each chain
-        self._build_chain(i/2)
+        self._build_chain(int(i/2))
         # Clean up threads
         if self.parallelize:
             for p in self.pipes:

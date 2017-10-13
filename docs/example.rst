@@ -40,7 +40,7 @@ draw 100 samples from :math:`\mathrm{Pr}(\xi)`::
 
     def rejection_sample(p, pmax, prop, size):
         out=[]
-        for s in xrange(size):
+        for s in range(size):
             x = prop()
             px = p(x)
             pu = np.random.uniform(low=0.0, high=pmax)
@@ -141,7 +141,7 @@ the data and some samples from the Bayesian posterior on the same graph::
     ax = fig.add_subplot(122)
     ax.scatter(x, y, alpha=0.5)
     ax.errorbar(x, y, xerr=xsig, yerr=ysig, ls=' ', alpha=0.5)
-    for i in xrange(0, len(lm.chain), 25):
+    for i in range(0, len(lm.chain), 25):
         xs = np.arange(-10,11)
         ys = lm.chain[i]['alpha'] + xs * lm.chain[i]['beta']
         ax.plot(xs, ys, color='r', alpha=0.02)
@@ -184,11 +184,11 @@ results::
     ax = fig.add_subplot(122)
     ax.errorbar(x[delta], ycens[delta], xsig[delta], ysig[delta], ls=' ', alpha=0.4)
     ax.errorbar(x[notdelta], ycens[notdelta], yerr=0.3, uplims=np.ones(sum(notdelta), dtype=bool), ls=' ', c='b', alpha=0.4)
-    for i in xrange(0, len(lmcens.chain), 25):
+    for i in range(0, len(lmcens.chain), 25):
         xs = np.arange(-10, 11)
         ys = lmcens.chain[i]['alpha'] + xs * lmcens.chain[i]['beta']
         ax.plot(xs, ys, color='g', alpha=0.02)
-    for i in xrange(0, len(lm.chain), 25):
+    for i in range(0, len(lm.chain), 25):
         xs = np.arange(-10, 11)
         ys = lm.chain[i]['alpha'] + xs * lm.chain[i]['beta']
         ax.plot(xs, ys, color='r', alpha=0.02)
