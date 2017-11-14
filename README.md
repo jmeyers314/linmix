@@ -42,9 +42,9 @@ Usage
 import linmix
 lm = linmix.LinMix(x, y, xsig=xsig, ysig=ysig, xycov=xycov, delta=delta, K=K, nchains=nchains)
 lm.run_mcmc(miniter=miniter, maxiter=maxiter, silent=silent)
-print lm.chains['alpha'].mean(), lm.chains['alpha'].std()
-print lm.chains['beta'].mean(), lm.chains['beta'].std()
-print lm.chains['sigsqr'].mean(), lm.chains['sigsqr'].std()
+print("{}, {}".format(lm.chain['alpha'].mean(), lm.chain['alpha'].std()))
+print("{}, {}".format(lm.chain['beta'].mean(), lm.chain['beta'].std()))
+print("{}, {}".format(lm.chain['sigsqr'].mean(), lm.chain['sigsqr'].std()))
 ```
 
 Installation
