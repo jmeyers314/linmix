@@ -169,8 +169,8 @@ class Chain(object):
         xihat_xy_i[wyerr] += (self.xycov / self.yvar * (self.eta - self.y))[wyerr]
         # Eqn (55)
         xihat_ik = (sigma_xihat_i_sqr[:, np.newaxis]
-                    * ((xihat_xy_i/self.xvar
-                        * (1.0 - self.xycorr**2))[:, np.newaxis]
+                    * ((xihat_xy_i/(self.xvar
+                        * (1.0 - self.xycorr**2)))[:, np.newaxis]
                        + self.beta*(self.eta[:, np.newaxis] - self.alpha)/self.sigsqr
                        + self.mu/self.tausqr))
         # Eqn (54)
